@@ -199,6 +199,8 @@ Created when a client accepts a proposal. The central entity of the platform.
 | `hourly_rate` | NUMERIC(10,2) | CHECK ((contract_type='fixed' AND hourly_rate IS NULL) OR (contract_type='hourly' AND hourly_rate IS NOT NULL)) | NULL for fixed contracts, enforced at DB level |
 | `hours_logged` | NUMERIC(8,2) | NOT NULL DEFAULT 0 | For hourly contracts |
 | `status` | TEXT | NOT NULL DEFAULT 'active' CHECK IN ('active','completed','disputed','cancelled') | |
+| `completion_initiated_by` | BIGINT | FK → users | The first party to call /complete. NULL until initiated. |
+| `completion_initiated_at` | TIMESTAMP | | Timestamp of first completion call. NULL until initiated. |
 | `hive_tx_id` | TEXT | | On-chain contract creation record |
 | `start_date` | TIMESTAMP | | |
 | `end_date` | TIMESTAMP | | |
@@ -483,6 +485,8 @@ erDiagram
         numeric hourly_rate
         numeric hours_logged
         text status
+        bigint completion_initiated_by FK
+        timestamp completion_initiated_at
         text hive_tx_id
         timestamp start_date
         timestamp end_date
@@ -596,6 +600,7 @@ erDiagram
     jobs ||--o{ contracts : "governs"
     users ||--o{ contracts : "client in"
     users ||--o{ contracts : "freelancer in"
+    users ||--o{ contracts : "initiates completion"
     contracts ||--o{ milestones : "broken into"
     contracts ||--o{ payments : "tracked by"
     contracts ||--o{ messages : "has"
