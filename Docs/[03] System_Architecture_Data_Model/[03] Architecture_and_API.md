@@ -211,7 +211,8 @@ Auth: JWT Bearer token on all protected routes (marked 🔒)
 | POST | `/jobs/:id/proposals` | 🔒 | Submit a proposal (freelancer only) |
 | PUT | `/proposals/:id` | 🔒 | Edit own proposal (while pending) |
 | DELETE | `/proposals/:id` | 🔒 | Withdraw own proposal |
-| POST | `/proposals/:id/accept` | 🔒 | Accept a proposal → creates contract (client only) |
+| POST | `/proposals/:id/accept` | 🔒 | Accept a proposal → creates `contracts` row in DB, returns contract data + `custom_json` payload for client to broadcast on-chain (Posting key via Keychain). Client calls back with `hive_tx_id` to save to `contracts.hive_tx_id`. (client only) |
+| POST | `/proposals/:id/accept/confirm` | 🔒 | Record `hive_tx_id` from client's contract creation broadcast → saves to `contracts.hive_tx_id` (client only) |
 | POST | `/proposals/:id/reject` | 🔒 | Reject a proposal (client only) |
 
 ---
