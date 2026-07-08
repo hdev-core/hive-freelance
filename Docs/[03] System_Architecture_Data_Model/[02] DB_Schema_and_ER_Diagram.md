@@ -65,6 +65,8 @@ Core authentication table. A user authenticates via Hive Keychain — no passwor
 | `email` | TEXT | UNIQUE | Optional, for off-chain notifications only |
 | `role` | TEXT | NOT NULL CHECK IN ('client','freelancer','both','admin') | A user can hold both roles |
 | `is_active` | BOOLEAN | NOT NULL DEFAULT true | |
+| `token_valid_after` | TIMESTAMP | DEFAULT NULL | Set to NOW() to immediately invalidate all active sessions. NULL = no revocation triggered. See doc 04 Session Revocation. |
+| `is_super_admin` | BOOLEAN | NOT NULL DEFAULT false | Gates emergency rotation and super-admin-only actions. Checked live at DB level for high-stakes endpoints regardless of JWT claim. |
 | `created_at` | TIMESTAMP | NOT NULL DEFAULT now() | |
 | `updated_at` | TIMESTAMP | NOT NULL DEFAULT now() | |
 | `deleted_at` | TIMESTAMP | | Soft delete — preserves contract history |
@@ -402,6 +404,8 @@ erDiagram
         text email UK
         text role
         boolean is_active
+        timestamp token_valid_after
+        boolean is_super_admin
         timestamp created_at
         timestamp updated_at
         timestamp deleted_at
