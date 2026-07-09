@@ -1,0 +1,453 @@
+# Design System Notes: Freelance Marketplace Platform (Upwork-Style) — Hive-Enhanced
+
+# 1. Design System Overview
+
+This document defines the visual identity, UI principles, and reusable components used throughout the freelance marketplace platform.
+
+The design system aims to create a professional, trustworthy, and intuitive experience for all users.
+
+The interface combines:
+- Modern SaaS marketplace aesthetics
+- Clear information hierarchy
+- Trust-focused design patterns
+- Blockchain transparency concepts inspired by Hive
+
+The system supports three user roles:
+- **Clients:** Sourcing talent, managing escrow funds, and reviewing proposals.
+- **Freelancers:** Discovering gigs, submitting milestone proposals, and tracking earnings.
+- **Admins:** Overseeing the platform ecosystem, reviewing system issues, and managing network stability.
+
+---
+
+# 2. Brand Identity
+
+## Brand Personality
+
+The platform should communicate:
+
+| Attribute | Design Direction |
+|-----------|-----------------|
+| Trustworthy | Clean layouts, transparent block metrics, verified indicators |
+| Professional | Structured dashboards and role-focused interfaces |
+| Accessible | Simple navigation, clear typography, understandable actions |
+| Transparent | Visible reputation scores, contract milestones, and blockchain transaction verification |
+| Collaborative | Communication-focused workspaces and real-time chat updates |
+
+---
+
+# 3. Visual Style
+
+## Overall Style
+
+The interface follows a modern marketplace/SaaS style:
+
+- Minimal and clean layouts
+- Card-based information organization (white surface containers with thin borders and subtle shadows)
+- Clear call-to-action buttons
+- Consistent spacing and high information density
+- Professional sans-serif typography
+- Focus on user-generated and on-chain content
+
+The design prioritizes usability, data clarity, and security indicators over decorative elements.
+
+---
+
+# 4. Color System
+
+The platform uses a unified theme mapping system, ensuring every light mode color token has a corresponding high-contrast, low-glare equivalent in dark mode.
+
+## Core Brand Palette
+
+| Element / Usage | Light Mode Hex | Dark Mode Hex | Purpose |
+|:---|:---|:---|:---|
+| **Primary Brand Blue** | `#1A56FF` | `#1A56FF` | Main CTAs, primary action buttons, active navigation states |
+| **Canvas Background** | `#F8FAFC` | `#0B0F19` | Global application layout background canvas |
+| **Surface / Container** | `#FFFFFF` | `#161D30` | Cards, dashboard widgets, sidebars, panels, form inputs |
+| **Primary Text** | `#0F172A` | `#F8FAFC` | Headers, page titles, primary labels, main copy |
+| **Secondary Text** | `#64748B` | `#94A3B8` | Subtitles, desaturated metadata, timestamps, hashes |
+| **Borders / Separators** | `#E2E8F0` | `#24324F` | Card boundaries, input outlines, table row dividers |
+
+---
+
+## Semantic Status Palette
+
+Status badges and system alerts use background fills paired with high-contrast text strings.
+
+| State Indicator | Light Mode (BG / Text) | Dark Mode (BG / Text) | Platform Use Case |
+|:---|:---|:---|:---|
+| **Success / Growth** | `#ECFDF5` / `#047857` | `#062F21` / `#10B981` | Completed contracts, payments, "Escrow Funded" status |
+| **Warning / Pending** | `#FEF3C7` / `#92400E` | `#2D1F06` / `#F59E0B` | Deadlines, milestones pending review, "Awaiting Funding" |
+| **Error / Alert** | `#FEE2E2` / `#991B1B` | `#3A1010` / `#EF4444` | Failed transactions, validation errors, admin issues |
+| **Information** | `#EFF6FF` / `#1D4ED8` | `#091E42` / `#3B82F6` | System notifications, network logs, metadata info |
+
+---
+
+## Theme Consistency Rules
+
+Both themes must strictly maintain:
+- The exact same component padding and structural footprint.
+- Identical typography sizing and hierarchy rules.
+- Shared functional status rules (e.g., if a state is visually highlighted in Light Mode, it must remain proportionally highlighted in Dark Mode).
+
+---
+
+# 5. Typography
+
+## Typography Goals
+
+Typography should provide:
+- Strong visual hierarchy
+- High readability for numbers and data points
+- A clean, professional appearance
+
+## Text Hierarchy
+
+| Element / Token | Font Weight | Line Height | Case Style | Typical Usage Context |
+|--------|------|-------------|------------|-----------------------|
+| Heading 1 | Bold (700) | 1.25 | Sentence | Main dashboard greetings (e.g., "Welcome back, Maya") |
+| Heading 2 | SemiBold (600) | 1.30 | Sentence | Major sections and component categories |
+| Heading 3 | SemiBold (600) | 1.35 | Sentence | Job titles, modal headers, and sub-sections |
+| Body Text | Regular (400) | 1.50 | Sentence | Descriptions, long messages, and proposal cover letters |
+| Numeric Text | Bold (700) | 1.10 | Normal | Primary asset amounts and pricing (e.g., "42,150 HIVE") |
+| Caption Text | Medium (500) | 1.40 | Normal | Timestamps, labels, block numbers, and hashes |
+
+---
+
+# 6. Layout Principles
+
+## Spacing
+
+The interface uses consistent spacing patterns to maintain layout clarity.
+
+Common spacing rules:
+- **Global Layout Canvas:** Standard 1440px viewport container width with variable responsive scaling.
+- **Dashboard Layout:** Standard two-column configuration featuring a fixed left navigation sidebar (240px wide) paired with a fluid main stage canvas.
+- **Content Card Padding:** Structural components and summary cards use explicit 24px padding.
+- **Data Table Padding:** Tabular listings use a compressed 16px row padding to maximize scanning efficiency.
+
+---
+
+## Responsive Design
+
+All pages should support:
+- Desktop layouts
+- Tablet layouts
+- Mobile-friendly views
+
+Layouts adapt seamlessly by:
+- Stacking layout grids and cards vertically
+- Collapsing sidebars and main navigation links into clean toggle menus
+- Transforming tables into readable linear listing layouts
+- Simplifying large analytic dashboards to show core data summaries
+
+---
+
+# 7. Core UI Components
+
+## Navigation Components
+
+### Navbar
+
+Used across public-facing visitor routes and marketing landing pathways.
+
+Contains:
+- Platform logo 
+- Public navigation links 
+- Authentication state actions (`Sign In` link / `Connect Hive Wallet` action button)
+
+---
+
+### Sidebar Navigation
+
+Used for authenticated dashboards. It dynamically displays routes according to the user's active role.
+
+Contains:
+- **Platform Brand Header:** Logo container linked to the default landing path.
+- **Client/Freelancer Menu Stack:** Icon-accompanied vertical links (`Overview`, `Jobs`, `Proposals`, `Messages`, `Escrow & Wallet`).
+- **Admin Specific Stack:** Links for `Platform Metrics`, `Dispute Center`, `User Management`, and `System Logs`.
+- **User Anchor Block:** Fixed base element displaying active avatar, profile display name, and unique wallet handle identifier (`@maya.hive`).
+
+---
+
+## Buttons
+
+### Primary Button
+
+Purpose: Used for the primary, high-priority call to action on a page.
+
+Examples:
+- Create Job / Post a job
+- Apply Now / Submit Proposal
+- Approve & Release
+- Deposit / Connect Wallet
+
+Style: Solid `#1A56FF` fill with crisp white text.
+
+### Secondary Button
+
+Purpose: Used for alternative or secondary navigation and actions.
+
+Examples:
+- Cancel
+- Message Client / Message Freelancer
+- Withdraw
+- Save Draft
+
+Style: Soft gray surface background paired with secondary neutral brand text.
+
+### Destructive Button
+
+Purpose: Used for irreversible system actions.
+
+Examples:
+- Delete Job
+- Reject Proposal
+- Suspend Account (Admin)
+
+Style: Solid semantic red background fill or red outline variant with clear safety validation prompts.
+
+---
+
+## Cards
+
+Cards are the foundational containers used to organize information.
+
+Used for:
+- Job marketplace postings
+- Freelancer profile summaries
+- Main dashboard analytics and statistics
+- Real-time notification updates
+- Immutable transaction logs
+
+Card layout structure:
+
+    Title Block / Category + Status Badges
+    ↓
+    Main Metrics / Core Body Information
+    ↓
+    Metadata Rows (Tags, Ratings, Location)
+    ↓
+    Action Bar / Component Buttons
+
+---
+
+## Forms
+
+Forms follow a highly structured layout logic:
+
+Components:
+- Grouped field containers within clean layout surfaces
+- Clean input fields and description textareas with crisp border boundaries
+- Interactive data selectors and milestone definition arrays (to set deliverables, individual budgets, and timelines)
+- Clear validation errors, status highlights, and active submit buttons
+
+Used for:
+- User registration and setup
+- Job listing generation
+- Step-by-step proposal submission
+- Milestone tracking and processing
+
+---
+
+# 8. Marketplace Components
+
+## Job Card
+
+Displays project opportunities throughout search feeds and recommendation panels.
+
+Contains:
+- Upper info line: Category label (e.g., `Development`), posting timestamp, and funding indicator badge (`Escrow Funded`)
+- Typography title: Large font link displaying the complete project title
+- Description text block: Concise 2-3 line preview summarizing the required task
+- Tag array: List of pill-shaped tags showing required skills (e.g., `Solidity`, `Security Audit`)
+- Footer metadata string: Client ratings, geographic location, active proposal count, and distinct budget parameters
+
+---
+
+## Job Detail Section
+
+Displays comprehensive job parameters on unique landing paths.
+
+Contains:
+- Full un-truncated description block and clear milestone breakdowns
+- Comprehensive tech stack demands and required skills
+- Exact budget classifications, expected execution timelines, and blockchain network targets
+- Summary profile card for the hiring client (history, total spent, profile verification score)
+- Floating sidebar containing direct structural actions (`Apply Now`, `Message Client`)
+
+---
+
+## Profile Card
+
+Displays user identity and track records to build ecosystem trust.
+
+Contains:
+- User avatar frame and full display name
+- Complete skill inventory badges
+- Average star rating scores and comprehensive review historical logs
+- Overall experience levels, historical earnings summary, and blockchain wallet validation states
+
+---
+
+## Proposal Card
+
+Displays freelancer applications within client review flows.
+
+Contains:
+- Detailed freelancer information and overview metrics
+- Custom cover letter introduction and introductory message text
+- Line-item budget distributions matching requested milestone schedules
+- Estimated time metrics and direct administrative controls (`Accept Proposal`, `Reject Proposal`)
+
+---
+
+# 9. Dashboard Components
+
+## Statistics Card
+
+High-density visual blocks positioned to quickly communicate key account performance and metrics.
+
+Examples:
+- Active Jobs / Active Contracts counts
+- Funds held securely in escrow
+- Total historical earnings or spend charts
+- Wallet token asset balance updates (with fiat estimates)
+
+---
+
+## Data Table
+
+Used to organize detailed transactions, contract updates, and history in a clean, tabular format.
+
+Features:
+- Configurable layout columns with explicit bold headers
+- Clean, searchable row dividers with action links
+- Data filters, sort controls, and page controls
+
+Columns include:
+- Type (e.g., `Escrow Deposit`, `Milestone Release`, `Platform Fee`)
+- Token Amount (color-coded for incoming green/outgoing dark values)
+- Transaction Validation Status Badges (`Confirmed`, `Pending`, `Released`)
+- Calendar Date Timestamps, System Block Heights, and click-route Transaction Hashes (`Tx Hash`)
+
+---
+
+## Status Badge
+
+Pill-shaped layout badges displaying state classifications for core entities.
+
+Examples:
+
+| Status Badge | Layout Style | System Use Case |
+|--------------|--------------|-----------------|
+| **Active / In Progress** | Blue background fill | Running contract being executed by a freelancer |
+| **Escrow Funded / Confirmed** | Green background fill | Funds locked on-chain or payment successfully completed |
+| **Awaiting Funding / Pending** | Amber background fill | Processing transactions or waiting for client escrow lock |
+| **Suspended / Rejected** | Red background fill | Canceled paths, validation issues, or flagged accounts |
+
+---
+
+## Activity Timeline
+
+Shows chronological project and platform histories.
+
+Used for:
+- Detailed contract step completions and deliveries
+- Chronological release approvals and milestone updates
+- Historical dispute and resolution logs
+
+---
+
+# 10. Communication Components
+
+## Chat Interface
+
+A multi-pane collaboration setup that connects chat communication with related contract tasks.
+
+Contains:
+- **Left Filter Bar:** Searchable vertical list of user conversations, display avatars, online status dots, and unread notification badges.
+- **Center Message Area:** Sequential text stream containing crisp chat bubbles, clear time groupings, file attachment objects, and message validation tags.
+- **Right Context Side Panel:** Dedicated summary section displaying active project details, locked escrow totals, current milestone completion lists, and direct buttons to release project funds (`Approve & Release`).
+
+---
+
+# 11. Blockchain Components
+
+## Wallet Connection Component
+
+Manages Web3 account state validation throughout top navigation bars and profile forms.
+
+Contains:
+- Current cryptographic network connection status indicators
+- Active account identity tags and connected wallet address markers
+- Direct modal triggers to pair or swap active Web3 addresses
+
+---
+
+## Transaction Card
+
+Dedicated block summaries documenting individual transfers over blockchain layers.
+
+Contains:
+- Unique clickable transaction hash links routing to blockchain explorers
+- Precise token amounts and related network fees
+- Timestamp structures and consensus block confirmations
+
+---
+
+## Trust / Verification Badge
+
+Visual markers that confirm verified accounts and on-chain security.
+
+Used to highlight:
+- Fully verified user identity checks
+- Successfully funded and locked smart contract escrows
+- Validated block logs and system compliance markers
+
+---
+
+# 12. Admin Management Components
+
+## Admin Overview Dashboard
+
+A high-level interface tailored for platform admins to monitor network health, manage users, and resolve disputes.
+
+Contains:
+- **Ecosystem Monitoring Cards:** Top-level metrics tracking total platform transactional volume, active escrow value, total registered user metrics, and current unresolved dispute flags.
+- **Dispute Resolution Workspace:** A specialized layout comparing user contracts, milestones, and chat logs side-by-side, equipped with admin controls to release funds or issue refunds.
+- **User Compliance Controls:** Administrative tools attached to profile files to adjust user permissions, flag bad actors, check identity statuses, or issue temporary account suspensions.
+- **System Activity Log Grid:** High-density transaction tables tracking global portal actions, security exceptions, smart contract adjustments, and administrative overrides.
+
+---
+
+# 13. Component Consistency Rules
+
+All components should follow:
+
+| Rule | Purpose |
+|------|---------|
+| Reuse existing tokens | Maintain consistent colors, typography, spacing, and brand identity |
+| Keep actions predictable | Keep primary buttons, navigation patterns, and form layouts uniform across roles |
+| Use clear semantic labels | Reduce confusion during high-stakes financial and contract paths |
+| Display critical info first | Put primary metrics, project statuses, and wallet metrics at the top of layouts |
+| Provide explicit feedback | Show clear updates after actions, especially during blockchain transaction flows |
+| Admin actions require validation | Require explicit confirmation steps for all platform-wide administrative interventions |
+
+---
+
+# 14. Design System Summary
+
+The design system focuses on creating a reliable freelance marketplace experience through:
+
+- Consistent reusable components
+- Clear user workflows adapted for clients, freelancers, and admins
+- Professional visual identity
+- Trust-focused blockchain elements
+- Scalable UI patterns
+
+The system supports all major platform experiences:
+- Landing pages and public marketplace discovery
+- Complete job posting and multi-step proposal flows
+- Comprehensive user dashboards and administrative centers
+- Combined messaging and milestone contract views
+- Verifiable blockchain payment tracking and wallet interactions
