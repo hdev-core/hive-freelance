@@ -1,9 +1,4 @@
 # 04 — Authentication & Roles Strategy
-**Project:** Hive Freelance Escrow Platform  
-**Prepared by:** Laure Mohsen  
-**Phase:** Planning — System Architecture & Data Model  
-**Date:** July 2026  
-**Scope:** MVP (1.5–2 month internship)
 
 ---
 
