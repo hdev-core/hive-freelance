@@ -24,6 +24,8 @@ The development process follows a feature-based approach:
 
 Project Setup
 ↓
+Hive Spike (Keychain + Escrow PoC)
+↓
 Authentication & User Management
 ↓
 Profiles & Marketplace
@@ -44,10 +46,10 @@ Testing & Deployment
 
 | Week | Main Focus | Expected Outcome |
 |------|------------|------------------|
-| Week 1 | Setup, architecture, authentication, database foundation | Working project structure and user system |
-| Week 2 | Profiles, job marketplace, search functionality | Users can create profiles and interact with jobs |
+| Week 1 | Setup, architecture, authentication, database foundation, early Hive spike | Working project structure, user system, and initial Keychain/escrow proof of concept |
+| Week 2 | Hive spike validation, profiles, job marketplace, search functionality | Validated Hive flow plus users can create profiles and interact with jobs |
 | Week 3 | Proposal system, contracts, dashboards | Complete freelancer-client workflow |
-| Week 4 | Communication, payments, Hive integration | Marketplace workflow enhanced with blockchain features |
+| Week 4 | Communication, payments, expanded Hive integration | Marketplace workflow enhanced with blockchain features |
 | Week 5 | Testing, optimization, documentation, deployment | Final working product ready for demonstration |
 
 ---
@@ -66,12 +68,14 @@ Testing & Deployment
 	- Authentication: Implement signup and login functionality
 	- User Management: Create user models and authentication flow
 	- UI Foundation: Build reusable components and styling system
+	- Hive Spike: Prove Keychain connection and a minimal escrow initiation flow in a small prototype
 
 	Deliverables:
 	- Running application structure
 	- Database connection
 	- Authentication workflow
 	- Initial UI components
+	- Validated early Hive proof of concept
 
 	Dependencies:
 	- None
@@ -88,11 +92,13 @@ Testing & Deployment
 	- Profile Editing: Update and manage profile information
 	- Public Profiles: View freelancer/client pages
 	- Marketplace Layout: Job browsing interface structure
+	- Hive Spike Validation: Confirm the Keychain and escrow prototype is stable before deeper feature buildout
 
 	Deliverables:
 	- Functional freelancer profiles
 	- Functional client profiles
 	- Marketplace interface
+	- Stable early Hive integration prototype
 
 	Dependencies:
 	- Authentication system
@@ -134,7 +140,7 @@ Testing & Deployment
 	- Client Dashboard: Manage jobs and freelancers
 	- Messaging: Enable communication between users
 	- Notifications: Inform users about important events
-	- Hive Integration: Add blockchain-related functionality
+	- Hive Integration: Expand the validated early spike into full escrow and payment-related functionality
 
 	Potential Hive Enhancements:
 	- Transaction Records: Transparent payment history

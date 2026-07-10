@@ -153,7 +153,7 @@ Used across public-facing visitor routes and marketing landing pathways.
 Contains:
 - Platform logo 
 - Public navigation links 
-- Authentication state actions (`Sign In` link / `Connect Hive Wallet` action button)
+- Authentication state actions (`Sign In` link / `Connect Hive Account` action button)
 
 ---
 
@@ -163,9 +163,9 @@ Used for authenticated dashboards. It dynamically displays routes according to t
 
 Contains:
 - **Platform Brand Header:** Logo container linked to the default landing path.
-- **Client/Freelancer Menu Stack:** Icon-accompanied vertical links (`Overview`, `Jobs`, `Proposals`, `Messages`, `Escrow & Wallet`).
+- **Client/Freelancer Menu Stack:** Icon-accompanied vertical links (`Overview`, `Jobs`, `Proposals`, `Messages`, `Escrow & Funds`).
 - **Admin Specific Stack:** Links for `Platform Metrics`, `Dispute Center`, `User Management`, and `System Logs`.
-- **User Anchor Block:** Fixed base element displaying active avatar, profile display name, and unique wallet handle identifier (`@maya.hive`).
+- **User Anchor Block:** Fixed base element displaying active avatar, profile display name, and unique Hive account handle identifier (`@maya.hive`).
 
 ---
 
@@ -179,7 +179,7 @@ Examples:
 - Create Job / Post a job
 - Apply Now / Submit Proposal
 - Approve & Release
-- Deposit / Connect Wallet
+- Deposit / Connect Hive Account
 
 Style: Solid `#1A56FF` fill with crisp white text.
 
@@ -285,7 +285,7 @@ Contains:
 - User avatar frame and full display name
 - Complete skill inventory badges
 - Average star rating scores and comprehensive review historical logs
-- Overall experience levels, historical earnings summary, and blockchain wallet validation states
+- Overall experience levels, historical earnings summary, and Hive account verification states
 
 ---
 
@@ -311,7 +311,7 @@ Examples:
 - Active Jobs / Active Contracts counts
 - Funds held securely in escrow
 - Total historical earnings or spend charts
-- Wallet token asset balance updates (with fiat estimates)
+- Hive account balance and asset updates (with fiat estimates)
 
 ---
 
@@ -373,14 +373,14 @@ Contains:
 
 # 11. Blockchain Components
 
-## Wallet Connection Component
+## Hive Account Connection Component
 
-Manages Web3 account state validation throughout top navigation bars and profile forms.
+Manages Hive account connection and identity validation throughout top navigation bars and profile forms.
 
 Contains:
-- Current cryptographic network connection status indicators
-- Active account identity tags and connected wallet address markers
-- Direct modal triggers to pair or swap active Web3 addresses
+- Current Hive network connection status indicators
+- Active account identity tags and connected Hive account handle markers
+- Direct modal triggers to pair or swap active Hive accounts
 
 ---
 
@@ -406,15 +406,15 @@ Used to highlight:
 
 ---
 
-# 12. Admin Management Components
+# 12. Admin Management Components (Phase 2)
 
-## Admin Overview Dashboard
+## Admin Overview Dashboard (Phase 2)
 
-A high-level interface tailored for platform admins to monitor network health, manage users, and resolve disputes.
+A high-level interface tailored for platform admins to monitor network health, manage users, and resolve disputes. This is a future-phase design exploration and is not part of the MVP scope.
 
 Contains:
 - **Ecosystem Monitoring Cards:** Top-level metrics tracking total platform transactional volume, active escrow value, total registered user metrics, and current unresolved dispute flags.
-- **Dispute Resolution Workspace:** A specialized layout comparing user contracts, milestones, and chat logs side-by-side, equipped with admin controls to release funds or issue refunds.
+- **Dispute Resolution Workspace (Phase 2):** A specialized layout comparing user contracts, milestones, and chat logs side-by-side, equipped with admin controls to release funds or issue refunds.
 - **User Compliance Controls:** Administrative tools attached to profile files to adjust user permissions, flag bad actors, check identity statuses, or issue temporary account suspensions.
 - **System Activity Log Grid:** High-density transaction tables tracking global portal actions, security exceptions, smart contract adjustments, and administrative overrides.
 
@@ -429,7 +429,7 @@ All components should follow:
 | Reuse existing tokens | Maintain consistent colors, typography, spacing, and brand identity |
 | Keep actions predictable | Keep primary buttons, navigation patterns, and form layouts uniform across roles |
 | Use clear semantic labels | Reduce confusion during high-stakes financial and contract paths |
-| Display critical info first | Put primary metrics, project statuses, and wallet metrics at the top of layouts |
+| Display critical info first | Put primary metrics, project statuses, and account/escrow metrics at the top of layouts |
 | Provide explicit feedback | Show clear updates after actions, especially during blockchain transaction flows |
 | Admin actions require validation | Require explicit confirmation steps for all platform-wide administrative interventions |
 
