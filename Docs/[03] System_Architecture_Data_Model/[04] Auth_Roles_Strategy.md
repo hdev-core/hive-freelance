@@ -1,14 +1,17 @@
 # 04 — Authentication & Roles Strategy
+**Project:** Hive Freelance Escrow Platform  
+**Prepared by:** Laure Mohsen  
+**Phase:** Planning — System Architecture & Data Model  
+**Date:** July 2026  
+**Scope:** MVP (1.5–2 month internship)
 
 ---
 
 ## Overview
 
-Authentication uses Hive's cryptographic key system, not passwords. A user proves identity by signing a server-issued challenge with their Hive private key via Keychain. No password is stored. No private key ever touches the server for user operations.
+Two authentication paths. Users with an existing Hive account use **Hive Keychain** (challenge/response). Users without one use **Google OAuth** — the platform provisions a Hive account and delegates Resource Credits on their behalf. Both paths issue the same JWT on success.
 
-Two distinct Keychain interactions:
-- **Posting key** — for login (lowest privilege, cannot authorise fund movements)
-- **Active key** — for escrow operations (higher privilege, used only for financial actions)
+All server-side transaction signing uses `@hiveio/wax`. Browser-side Keychain signing uses `@hiveio/signers-keychain`.
 
 ---
 
@@ -17,10 +20,10 @@ Two distinct Keychain interactions:
 | Role | Description |
 |------|-------------|
 | `client` | Posts jobs, accepts proposals, funds milestones, approves work, releases payment |
-| `freelancer` | Submits proposals, delivers milestones, ratifies escrow |
-| `both` | All client AND freelancer permissions. Cannot be both roles on the same contract — enforced at the API layer (403 if `freelancer_id === client_id` on a job) |
+| `freelancer` | Submits proposals, delivers milestones, ratifies escrow, cooperative refunds |
+| `both` | All client AND freelancer permissions. 403 enforced if same user is both client and freelancer on the same contract |
 
-> **MVP note:** No admin role. Dispute resolution, moderation, and admin dashboards are Phase 2. There are only three valid role values: `client`, `freelancer`, `both`.
+> **MVP note:** No admin role. Dispute resolution and admin dashboards are Phase 2.
 
 ---
 
@@ -39,15 +42,16 @@ Two distinct Keychain interactions:
 | Submit a milestone | ❌ | ✅ | ✅ |
 | Approve a milestone | ✅ | ❌ | ✅ |
 | Release payment | ✅ | ❌ | ✅ |
+| Cooperative refund broadcast | ❌ | ✅ | ✅ |
 | Submit a review | ✅ | ✅ | ✅ |
 | Initiate contract completion | ✅ | ✅ | ✅ |
 | Cancel contract (pre-funding only) | ✅ | ✅ | ✅ |
 
 ---
 
-## Authentication Flow
+## Authentication Flows
 
-### Login (Posting Key)
+### Path 1 — Hive Keychain (native Hive users)
 
 ```mermaid
 %%{init: {'theme': 'neutral'}}%%
@@ -62,26 +66,59 @@ sequenceDiagram
     React->>API: GET /auth/challenge?username=alice
     API->>API: generate random challenge, store with 60s TTL
     API-->>React: {challenge: "rand_xyz_123"}
-
     React->>Keychain: requestSignBuffer(challenge, "Posting")
     Keychain->>User: prompts to sign with Posting key
     User->>Keychain: confirms
     Keychain-->>React: signed challenge
-
     React->>API: POST /auth/verify {username, signature, challenge}
-    API->>API: fetch alice's public Posting key from Hive node
-    API->>API: verify signature — reject if invalid or expired
+    API->>API: verify signature against alice's public Hive key
     API->>DB: upsert user record (first login creates the account)
     API-->>React: JWT (httpOnly cookie)
 ```
 
 **Challenge TTL:** 60 seconds. Single-use — invalidated immediately after verification.
 
+### Path 2 — Google OAuth (users without a Hive account)
+
+```mermaid
+%%{init: {'theme': 'neutral'}}%%
+sequenceDiagram
+    actor User
+    participant React
+    participant API
+    participant Google as Google OAuth
+    participant DB
+    participant Prov as Provisioning Service
+    participant HiveNode as Hive Node
+
+    User->>React: clicks "Continue with Google"
+    React->>API: GET /auth/google
+    API-->>React: redirect to Google consent screen
+    User->>Google: approves consent
+    Google->>API: GET /auth/google/callback?code=...
+    API->>Google: exchange code for token
+    Google-->>API: {sub, email}
+
+    API->>DB: lookup oauth_accounts by provider_user_id = sub
+    alt Returning Google user
+        API-->>React: JWT (httpOnly cookie)
+    else New Google user
+        API->>Prov: provision account for email
+        Prov->>HiveNode: account_create op (wax, platform pays fee)
+        Prov->>HiveNode: delegate_vesting_shares (RC delegation)
+        Prov->>KMS: store active key reference
+        Prov->>DB: insert users + oauth_accounts rows
+        API-->>React: JWT (httpOnly cookie)
+    end
+```
+
+> **RC delegation is mandatory.** A brand-new Hive account has ~0 Resource Credits and cannot broadcast any transaction. The provisioning service delegates RC immediately on account creation. Without this, all on-chain operations will silently fail for new users.
+
+> **Google users are custodial.** Their active key is held in the KMS and all escrow transactions are signed server-side on their behalf. They never install Keychain.
+
 ---
 
-### Transaction Signing (Active Key)
-
-The Active key is required for financial operations. The JWT session alone is not sufficient to authorise a blockchain transaction — the user must actively confirm each financial action via Keychain.
+### Transaction Signing (Active Key — Keychain users)
 
 ```mermaid
 %%{init: {'theme': 'neutral'}}%%
@@ -95,13 +132,11 @@ sequenceDiagram
     User->>React: clicks "Fund Milestone"
     React->>API: POST /contracts/:id/milestones/:mid/fund (JWT)
     API-->>React: escrow params {amount, agent, escrow_id, ...}
-
     React->>Keychain: requestBroadcast(escrow_transfer op, "Active")
     Keychain->>User: prompts to sign with Active key
     User->>Keychain: confirms
     Keychain->>HiveNode: broadcast signed tx
     HiveNode-->>React: {tx_id: "abc123"} (via Keychain callback)
-
     React->>API: PATCH /payments/:id/confirm {hive_tx_id: "abc123"} (JWT)
     API-->>React: payment status updated
 ```
@@ -128,9 +163,7 @@ sequenceDiagram
 | `iat` | Unix timestamp | Issued at |
 | `exp` | `iat + 24h` | 24-hour session for all roles |
 
-**Storage:** `httpOnly`, `Secure`, `SameSite=Strict` cookie — not `localStorage` (prevents XSS from reading the token).
-
-**Re-login:** Required after expiry. Keychain makes this a two-click operation so 24h is acceptable.
+**Storage:** `httpOnly`, `Secure`, `SameSite=Strict` cookie — not `localStorage`.
 
 ---
 
@@ -141,7 +174,7 @@ sequenceDiagram
 ```
 POST /milestones/:id/approve
   → authMiddleware       (valid JWT? → populate req.user)
-  → roleGuard(['client','both'])  (correct role?)
+  → roleGuard(['client','both'])
   → ownershipCheck       (is this their contract?)
   → handler
 ```
@@ -162,27 +195,17 @@ POST /milestones/:id/approve
 
 ## Key Type Reference — All On-Chain Operations
 
-| Operation | Hive Op | Key | Broadcaster | Triggered by |
-|-----------|---------|-----|-------------|-------------|
-| Fund milestone | `escrow_transfer` | **Active** | Client via Keychain | `POST /contracts/:id/milestones/:mid/fund` |
-| Ratify escrow | `escrow_approve` | **Active** | Freelancer via Keychain | `POST /payments/:id/ratify` |
-| Release payment | `escrow_release` | **Active** | Client via Keychain | `POST /payments/:id/release` |
-| Cooperative refund | `escrow_release` | **Active** | Freelancer via Keychain | `POST /payments/:id/refund` |
-| Create contract | `custom_json` | **Posting** | Client via Keychain | `POST /proposals/:id/accept` |
-| Approve milestone | `custom_json` | **Posting** | Client via Keychain | `POST /milestones/:id/approve` |
-| Submit review | `custom_json` | **Posting** | Either party via Keychain | `POST /contracts/:id/reviews` |
+| Operation | Hive Op | Key | Broadcaster |
+|-----------|---------|-----|-------------|
+| Fund milestone | `escrow_transfer` | Active | Keychain user / KMS (Google user, via wax) |
+| Ratify escrow | `escrow_approve` | Active | Keychain user / KMS (Google user, via wax) |
+| Agent auto-ratify | `escrow_approve` | Active | Agent backend (wax + KMS) |
+| Release payment | `escrow_release` | Active | Keychain user / KMS (Google user, via wax) |
+| Cooperative refund | `escrow_release` | Active | Freelancer Keychain / KMS |
+| Create contract | `custom_json` | **Posting** | Keychain user / KMS (Google user, via wax) |
+| Approve milestone | `custom_json` | **Posting** | Keychain user / KMS (Google user, via wax) |
+| Submit review | `custom_json` | **Posting** | Either party / KMS |
+| Provision account | `account_create` | Active | Provisioning service (wax + KMS) |
+| Delegate RC | `delegate_vesting_shares` | Active | Provisioning service (wax + KMS) |
 
-> **Active key only for fund movements.** Using Active key for `custom_json` operations (milestone approval, reviews) is explicitly wrong — it unnecessarily exposes the higher-privilege key on routine actions.
-
----
-
-## What Was Intentionally Cut for MVP
-
-| Cut item | Why | Phase 2 |
-|----------|-----|---------|
-| Admin role | No dispute resolution or admin dashboard in MVP | ✓ |
-| `is_super_admin` field | Requires admin governance infrastructure | ✓ |
-| Token TTL tiers (4h admin, 2h super-admin) | No admin role in MVP; flat 24h for all | ✓ |
-| `token_valid_after` / session revocation | Requires extra DB lookup per request; premature for MVP | ✓ |
-| Agent key rotation procedures | Operational concern; deferred to Phase 2 runbooks | ✓ |
-| Emergency rotation 2-of-3 approval | No super-admin structure in MVP | ✓ |
+> Active key is used only for operations that move or control funds and for provisioning. Using Active key for `custom_json` operations (approval, review) is wrong for Keychain users — it needlessly exposes the higher-privilege key.
