@@ -74,6 +74,7 @@ Extended per-user info. One record per user.
 | `location` | TEXT | | |
 | `hourly_rate` | NUMERIC(10,2) | CHECK > 0 | For display only in MVP |
 | `skills` | TEXT[] | | Plain text array — no junction table for MVP |
+| `verification_status` | TEXT | NOT NULL DEFAULT 'unverified' CHECK IN ('unverified','pending','verified') | Used for trust/verification badge UI |
 | `created_at` | TIMESTAMP | NOT NULL DEFAULT now() | |
 | `updated_at` | TIMESTAMP | NOT NULL DEFAULT now() | |
 
@@ -265,6 +266,7 @@ erDiagram
         text location
         numeric hourly_rate
         text skills
+        text verification_status
         timestamp created_at
         timestamp updated_at
     }

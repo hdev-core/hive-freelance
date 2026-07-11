@@ -60,12 +60,15 @@ The platform uses a unified theme mapping system, ensuring every light mode colo
 
 | Element / Usage | Light Mode Hex | Dark Mode Hex | Purpose |
 |:---|:---|:---|:---|
-| **Primary Brand Blue** | `#1A56FF` | `#1A56FF` | Main CTAs, primary action buttons, active navigation states |
+| **Primary Brand Accent** | `#1A56FF` | `#1A56FF` | General CTAs, primary action buttons, and non-blockchain navigation states |
+| **Hive Accent / Blockchain** | `#E31337` | `#E31337` | Escrow states, blockchain indicators, Hive Keychain actions, transaction highlights, and on-chain badges |
 | **Canvas Background** | `#F8FAFC` | `#0B0F19` | Global application layout background canvas |
 | **Surface / Container** | `#FFFFFF` | `#161D30` | Cards, dashboard widgets, sidebars, panels, form inputs |
 | **Primary Text** | `#0F172A` | `#F8FAFC` | Headers, page titles, primary labels, main copy |
 | **Secondary Text** | `#64748B` | `#94A3B8` | Subtitles, desaturated metadata, timestamps, hashes |
 | **Borders / Separators** | `#E2E8F0` | `#24324F` | Card boundaries, input outlines, table row dividers |
+
+Use the Hive crimson token sparingly. Keep the broader interface neutral with light surfaces, gray scales, and dark text; reserve red for on-chain and escrow interactions only.
 
 ---
 
@@ -75,9 +78,10 @@ Status badges and system alerts use background fills paired with high-contrast t
 
 | State Indicator | Light Mode (BG / Text) | Dark Mode (BG / Text) | Platform Use Case |
 |:---|:---|:---|:---|
-| **Success / Growth** | `#ECFDF5` / `#047857` | `#062F21` / `#10B981` | Completed contracts, payments, "Escrow Funded" status |
+| **Success / Growth** | `#ECFDF5` / `#047857` | `#062F21` / `#10B981` | Completed contracts, payments, and standard success states |
 | **Warning / Pending** | `#FEF3C7` / `#92400E` | `#2D1F06` / `#F59E0B` | Deadlines, milestones pending review, "Awaiting Funding" |
 | **Error / Alert** | `#FEE2E2` / `#991B1B` | `#3A1010` / `#EF4444` | Failed transactions, validation errors, admin issues |
+| **Hive / On-Chain Accent** | `#FEE2E2` / `#E31337` | `#3A1010` / `#E31337` | Escrow funded badges, transaction highlights, Hive Keychain buttons, and blockchain verification indicators |
 | **Information** | `#EFF6FF` / `#1D4ED8` | `#091E42` / `#3B82F6` | System notifications, network logs, metadata info |
 
 ---
@@ -181,7 +185,7 @@ Examples:
 - Approve & Release
 - Deposit / Connect Hive Account
 
-Style: Solid `#1A56FF` fill with crisp white text.
+Style: Solid `#1A56FF` fill with crisp white text for standard primary actions. Hive-specific flows such as `Connect Hive Account`, on-chain escrow actions, and transaction calls use the `#E31337` Hive accent instead.
 
 ### Secondary Button
 
@@ -341,7 +345,7 @@ Examples:
 | Status Badge | Layout Style | System Use Case |
 |--------------|--------------|-----------------|
 | **Active / In Progress** | Blue background fill | Running contract being executed by a freelancer |
-| **Escrow Funded / Confirmed** | Green background fill | Funds locked on-chain or payment successfully completed |
+| **Escrow Funded / Confirmed** | Hive crimson accent fill | Funds locked on-chain or payment successfully completed |
 | **Awaiting Funding / Pending** | Amber background fill | Processing transactions or waiting for client escrow lock |
 | **Suspended / Rejected** | Red background fill | Canceled paths, validation issues, or flagged accounts |
 
@@ -393,6 +397,8 @@ Contains:
 - Precise token amounts and related network fees
 - Timestamp structures and consensus block confirmations
 
+Implementation handoff note: the transaction card should consume the escrow/payment fields defined in Laure's schema and escrow model, including payment status, escrow transaction IDs, and confirmation state rather than inventing separate UI-only fields.
+
 ---
 
 ## Trust / Verification Badge
@@ -403,6 +409,8 @@ Used to highlight:
 - Fully verified user identity checks
 - Successfully funded and locked smart contract escrows
 - Validated block logs and system compliance markers
+
+Implementation handoff note: the badge and any milestone-state visuals should be wired to the shared schema fields for user/profile verification, contract status, milestone status, payment status, and on-chain confirmation so they stay aligned with Laure's escrow model.
 
 ---
 

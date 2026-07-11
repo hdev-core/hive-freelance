@@ -60,6 +60,7 @@ Testing & Deployment
 ### Milestone 1 — Project Foundation & Authentication
 	Timeline: Week 1
 	Objective: Establish the technical foundation of the application and implement user management.
+	Note: Milestone 1 is the infra-first foundation slice that aligns the UI, scaffold, and DB cards on the board.
 
 	Tasks:
 	- Project Setup: Initialize frontend and backend structure
