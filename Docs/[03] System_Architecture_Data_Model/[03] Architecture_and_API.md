@@ -4,7 +4,7 @@
 
 ## Overview
 
-Four layers, one background service. The blockchain listener — a Node.js process that subscribes to the live Hive chain, filters for this app's operations, and keeps PostgreSQL in sync — is what makes Hive a first-class architectural component rather than an afterthought.
+Four layers, one background service, one provisioning service. The blockchain listener subscribes to the live Hive chain, filters for this app's operations, and keeps PostgreSQL in sync. The provisioning service creates Hive accounts for Google OAuth users and delegates Resource Credits to new accounts so they can broadcast transactions.
 
 ---
 
@@ -15,46 +15,59 @@ Four layers, one background service. The blockchain listener — a Node.js proce
 flowchart TD
     subgraph CLIENT["Browser — React + TypeScript"]
         UI["UI Components\n(Dashboard, Jobs, Contracts)"]
-        KC["Hive Keychain\n(transaction signing)"]
+        KC["Hive Keychain\n(@hiveio/signers-keychain)"]
+        GOAUTH["Google OAuth\n(for users without Hive account)"]
         UI --> KC
+        UI --> GOAUTH
     end
 
-    subgraph BACKEND["Backend — Node.js + Express"]
+    subgraph BACKEND["Backend — Node.js + Express + @hiveio/wax"]
         API["REST API\n(/api/v1/...)"]
-        AUTH["Auth Middleware\n(Keychain signature verify)"]
+        AUTH["Auth Middleware\n(Keychain verify / Google OAuth)"]
         BL["Business Logic\n(jobs, proposals, contracts,\nmilestones, reviews)"]
+        PROV["Provisioning Service\n(account_create + RC delegation\nfor Google users, via wax)"]
         API --> AUTH --> BL
+        API --> PROV
     end
 
-    subgraph LISTENER["Blockchain Listener — Node.js"]
-        STREAM["Hive Block Stream\n(dhive streaming)"]
+    subgraph LISTENER["Blockchain Listener — Node.js\n(MVP: custom stream → Production: HAF)"]
+        STREAM["Hive Block Stream\n(wax streaming)"]
         FILTER["Op Filter\n(app_id = hive-freelance-v1)"]
         WRITER["hive_records Writer\n(+ status updater)"]
         STREAM --> FILTER --> WRITER
     end
 
     subgraph DB["PostgreSQL"]
-        TABLES["users, profiles, jobs, proposals\ncontracts, milestones, payments\nreviews, hive_records"]
+        TABLES["users, profiles, jobs, proposals\ncontracts, milestones, payments\nreviews, hive_records, oauth_accounts"]
     end
 
     subgraph HIVE["Hive Blockchain"]
         NODE["Public API Node\n(api.hive.blog)"]
-        CHAIN["Immutable Ledger\n(escrow_transfer, escrow_approve\nescrow_release, custom_json)"]
+        CHAIN["Immutable Ledger\n(escrow_transfer, escrow_approve\nescrow_release, custom_json\naccount_create, delegate_vesting_shares)"]
         NODE --> CHAIN
+    end
+
+    subgraph GOOGLE["Google OAuth API"]
+        GAPI["OAuth 2.0 Token Endpoint"]
     end
 
     UI -->|"HTTPS REST\n(JWT session)"| API
     BL -->|"reads & writes"| DB
     KC -->|"broadcasts signed tx\ndirectly to node"| NODE
-    BL -->|"reads via dhive"| NODE
+    BL -->|"reads via wax"| NODE
+    PROV -->|"account_create\ndelegate_vesting_shares"| NODE
     STREAM -->|"subscribes to new blocks"| NODE
     WRITER -->|"writes hive_records\nupdates payment status"| DB
+    GOAUTH -->|"OAuth token"| GAPI
+    GAPI -->|"verified identity"| AUTH
 
     style CLIENT fill:#FFF0F8,stroke:#E01E8A,stroke-width:2px,color:#1C0B2E
     style BACKEND fill:#F0EAFF,stroke:#7C3AED,stroke-width:2px,color:#1C0B2E
     style LISTENER fill:#EDE9FE,stroke:#7C3AED,stroke-width:2px,color:#1C0B2E
     style DB fill:#F8F5FF,stroke:#9B5DE5,stroke-width:2px,color:#1C0B2E
     style HIVE fill:#FEE8F5,stroke:#E01E8A,stroke-width:2px,color:#1C0B2E
+    style GOOGLE fill:#FFF0F8,stroke:#E01E8A,stroke-width:1px,color:#1C0B2E
+    style PROV fill:#DDD5FF,stroke:#7C3AED,color:#1C0B2E
 ```
 
 ---
@@ -63,8 +76,9 @@ flowchart TD
 
 | Layer | Responsible for | NOT responsible for |
 |-------|----------------|---------------------|
-| React frontend | UI, routing, Keychain integration, broadcasting txs | Business logic, DB access |
-| Express API | Auth, validation, business logic, DB reads/writes | Holding private keys, broadcasting txs |
+| React frontend | UI, routing, Keychain integration, Google OAuth redirect, broadcasting txs | Business logic, DB access |
+| Express API | Auth (both paths), validation, business logic, DB reads/writes | Holding user signing keys, broadcasting txs |
+| Provisioning service | Creating Hive accounts for Google users, delegating RC, storing custodial keys in KMS | Serving HTTP requests |
 | Blockchain listener | Stream blocks, filter ops, write `hive_records`, update payment status | Serving HTTP requests |
 | PostgreSQL | Relational data, fast queries, source of truth for app state | On-chain enforcement |
 | Hive blockchain | Immutable audit trail, escrow locking/release | Application logic |
@@ -131,11 +145,17 @@ sequenceDiagram
 
 ## Design Notes
 
-**Why the API never broadcasts user transactions:** Holding signing authority would make the backend a high-value target. Keychain keeps private keys in the browser extension.
+**Transaction library:** All server-side transaction building and signing uses `@hiveio/wax` (Greateck standard). Browser-side Keychain signing uses `@hiveio/signers-keychain`. Do not use `@hiveio/dhive`.
 
-**Why the blockchain listener is a separate service:** The API is request-driven. The listener is event-driven (reacts to new blocks every 3s). Mixing them creates lifecycle conflicts.
+**Blockchain listener (MVP trade-off):** The custom Node.js block listener is essentially a hand-rolled subset of HAF (Hive Application Framework) — a PostgreSQL extension that streams Hive block data directly into SQL tables and handles fork reversion automatically. The custom listener is defensible for MVP scale. Migration to HAF is the production direction.
 
-**The agent account:** The platform backend holds the Hive agent account's active key to auto-approve `escrow_approve` during ratification and to broadcast `escrow_release` for refunds when contracts are cancelled. This is the one case where the backend broadcasts — the agent role in Hive escrow is specifically designed for a trusted third party. The agent account's active key is stored in an environment variable / secrets manager and holds zero HIVE balance.
+**Google OAuth + account provisioning:** Users without a Hive account log in via Google. The provisioning service creates a Hive account (`account_create` op), delegates Resource Credits (`delegate_vesting_shares`) so the new account can broadcast transactions, and stores the custodial active key in a KMS. The `oauth_accounts` table (see doc 02) maps Google identities to Hive usernames.
+
+**Resource Credits:** Brand-new Hive accounts have ~0 RC and cannot broadcast any transaction. RC delegation by the provisioning service is a hard prerequisite before a Google-provisioned user can perform any on-chain action.
+
+**The agent account:** The platform backend holds the Hive agent account's active key to auto-approve `escrow_approve` during ratification. This key can move all escrowed funds on the platform and is the highest-value secret in the system. It must be stored in a KMS/HSM (not an env var in production), with restricted signing scope, full audit logging on every use, and alerting on any unexpected signing event. The agent account holds zero HIVE balance. See doc 05 for full hardening requirements.
+
+**Why the blockchain listener is a separate service:** The API is request-driven. The listener is event-driven (new blocks every 3s). Mixing them creates lifecycle conflicts. They share the same DB but run independently.
 
 ---
 
@@ -150,8 +170,10 @@ Auth: JWT Bearer token on all protected routes (marked 🔒)
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/auth/challenge` | — | Get sign challenge for a Hive username |
+| GET | `/auth/challenge` | — | Get sign challenge for a Hive username (Keychain path) |
 | POST | `/auth/verify` | — | Verify signed challenge, return JWT |
+| GET | `/auth/google` | — | Redirect to Google OAuth consent screen |
+| GET | `/auth/google/callback` | — | Google OAuth callback → provision Hive account if new → return JWT |
 
 ---
 
@@ -196,8 +218,8 @@ Auth: JWT Bearer token on all protected routes (marked 🔒)
 |--------|----------|------|-------------|
 | GET | `/contracts` | 🔒 | List own contracts (as client or freelancer) |
 | GET | `/contracts/:id` | 🔒 | Contract detail + milestones + payment status |
-| POST | `/contracts/:id/complete` | 🔒 | Sets `completed_by_client = true` or `completed_by_freelancer = true` depending on caller. Status moves to `completed` only once both flags are true — i.e. the second party to call this endpoint completes the contract. |
-| POST | `/contracts/:id/cancel` | 🔒 | Cancel contract — only allowed if no milestone has status `funded`, `submitted`, `approved`, or `released`. If any milestone has already been escrowed, use the refund flow instead. |
+| POST | `/contracts/:id/complete` | 🔒 | Sets caller's completion flag; status → `completed` once both `completed_by_client` and `completed_by_freelancer` are true |
+| POST | `/contracts/:id/cancel` | 🔒 | Only allowed if no milestone has status `funded`, `submitted`, `approved`, or `released` |
 
 ---
 
@@ -208,7 +230,7 @@ Auth: JWT Bearer token on all protected routes (marked 🔒)
 | GET | `/contracts/:id/milestones` | 🔒 | List milestones |
 | POST | `/contracts/:id/milestones` | 🔒 | Create milestone (client, while contract active) |
 | POST | `/milestones/:id/submit` | 🔒 | Freelancer marks milestone as done |
-| POST | `/milestones/:id/approve` | 🔒 | Client approves → broadcasts `custom_json` on-chain |
+| POST | `/milestones/:id/approve` | 🔒 | Client approves → returns `custom_json` payload to broadcast |
 | PATCH | `/milestones/:id/approve/confirm` | 🔒 | Record approval `hive_tx_id` |
 
 ---
@@ -224,10 +246,10 @@ Auth: JWT Bearer token on all protected routes (marked 🔒)
 | PATCH | `/payments/:id/ratify/confirm` | 🔒 | Record freelancer `escrow_approve` hive_tx_id; once agent also approved, listener sets status to `escrowed` |
 | POST | `/payments/:id/release` | 🔒 | Client gets `escrow_release` params for Keychain |
 | PATCH | `/payments/:id/release/confirm` | 🔒 | Record release `hive_tx_id` → status `released` |
-| POST | `/payments/:id/refund` | 🔒 | Freelancer gets `escrow_release` params for Keychain to broadcast back to client (cooperative cancellation with funded milestones) |
+| POST | `/payments/:id/refund` | 🔒 | Freelancer gets `escrow_release`-to-client params (cooperative cancellation with funded milestones) |
 | PATCH | `/payments/:id/refund/confirm` | 🔒 | Record refund `hive_tx_id` → status `refunded` |
 
-> **On cancellation with funded milestones:** `/contracts/:id/cancel` only works before any milestone is funded. If a milestone is already escrowed, the client must use a cooperative refund — the freelancer broadcasts `escrow_release` back to the client via Keychain. If the freelancer is unresponsive and unwilling to refund, the client's funds have no recovery path within what MVP exposes. This is an explicit accepted limitation — full dispute resolution (where an admin agent can force a release) is Phase 2. **This should be communicated clearly to demo evaluators and early users.** The `escrow_expiration` timeout does NOT auto-refund — when it passes, the release rules stay exactly the same (client can still release to freelancer; freelancer can still release to client). It does not resolve the problem.
+> **Contract cancellation with funded milestones:** `/cancel` only works before any milestone is funded. If a milestone is already escrowed, cooperative refund requires the freelancer to broadcast `escrow_release` back to the client. If the freelancer refuses, the client's funds have no recovery path in MVP — full dispute resolution is Phase 2. `escrow_expiration` does NOT auto-refund; it resolves nothing on its own.
 
 ---
 
@@ -237,17 +259,3 @@ Auth: JWT Bearer token on all protected routes (marked 🔒)
 |--------|----------|------|-------------|
 | POST | `/contracts/:id/reviews` | 🔒 | Submit review after contract completion |
 | GET | `/users/:username/reviews` | — | Get public reviews for a user |
-
----
-
-## What Was Intentionally Cut for MVP
-
-| Cut item | Why | Phase 2 |
-|----------|-----|---------|
-| Disputes endpoints | Requires admin role + complex resolution flow | ✓ |
-| Messages endpoints | Users use external messaging for now | ✓ |
-| Notifications endpoints | Requires background job infrastructure | ✓ |
-| Admin endpoints | No admin role in MVP | ✓ |
-| `/users` (browse freelancers) | People find work via job postings in MVP | ✓ |
-| `/categories`, `/skills` lookup endpoints | Text fields used instead | ✓ |
-| Two-step `/complete` + `/complete/confirm` | Simplified to single endpoint using boolean flags on contracts table | ✓ |
