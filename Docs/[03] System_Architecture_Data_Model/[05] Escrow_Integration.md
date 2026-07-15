@@ -182,7 +182,7 @@ If a contract needs to be cancelled after a milestone is escrowed, the freelance
 2. Freelancer Keychain `requestBroadcast(escrow_release, "Active")`
 3. Freelancer calls `PATCH /payments/:id/refund/confirm {hive_tx_id}` → `payments.status = refunded`
 
-> **If the freelancer refuses:** the client's funds have no recovery path within MVP scope. Full dispute resolution is Phase 2. `escrow_expiration` does NOT auto-refund — when it passes, the release rules stay exactly the same. It resolves nothing on its own.
+> **If the freelancer refuses:** either party can raise `escrow_dispute` — the platform agent then adjudicates via `POST /disputes/:id/resolve` and can release funds to either the client or the freelancer. `escrow_expiration` does NOT auto-refund; when it passes the release rules stay exactly the same. It resolves nothing on its own.
 
 ---
 

@@ -253,7 +253,7 @@ Auth: JWT Bearer token on all protected routes (marked 🔒)
 | POST | `/payments/:id/refund` | 🔒 | Freelancer gets `escrow_release`-to-client params (cooperative cancellation with funded milestones) |
 | PATCH | `/payments/:id/refund/confirm` | 🔒 | Record refund `hive_tx_id` → status `refunded` |
 
-> **Contract cancellation with funded milestones:** `/cancel` only works before any milestone is funded. If a milestone is already escrowed, cooperative refund requires the freelancer to broadcast `escrow_release` back to the client. If the freelancer refuses, the client's funds have no recovery path in MVP — full dispute resolution is Phase 2. `escrow_expiration` does NOT auto-refund; it resolves nothing on its own.
+> **Contract cancellation with funded milestones:** `/cancel` only works before any milestone is funded. If a milestone is already escrowed, the cooperative path is: freelancer broadcasts `escrow_release` back to the client. If the freelancer refuses to cooperate, either party can raise `escrow_dispute` — the platform agent then adjudicates and can release funds to either party via `POST /disputes/:id/resolve`. `escrow_expiration` does NOT auto-refund; it resolves nothing on its own.
 
 ---
 
