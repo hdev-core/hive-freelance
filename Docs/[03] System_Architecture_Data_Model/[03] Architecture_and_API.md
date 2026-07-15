@@ -157,6 +157,10 @@ sequenceDiagram
 
 **Why the blockchain listener is a separate service:** The API is request-driven. The listener is event-driven (new blocks every 3s). Mixing them creates lifecycle conflicts. They share the same DB but run independently.
 
+**LIB requirement — never confirm on first-seen:** Only update `payments.status` to `escrowed` or `released` after the containing block reaches the Last Irreversible Block (LIB). A payment seen in a head block could be on a fork and later revert. The listener must track LIB (available from `condenser_api.get_dynamic_global_properties` as `last_irreversible_block_num`) and delay status updates until the block is confirmed irreversible. This is one of the strongest arguments for migrating to HAF, which handles irreversibility automatically.
+
+**Custodial surface — Google user keys:** The KMS holds an active key for every Google-provisioned user, not just the agent. Per-user key isolation (separate KMS key per user, not a shared vault key) is required. Least-authority principle: each user's KMS key should only be authorized to sign for that user's account. Users must be clearly informed in UX/ToS that the platform is custodying their keys. The claim/hand-over path (`/auth/me/claim-account`) provides the exit to self-custody.
+
 ---
 
 ## API Endpoints
@@ -250,6 +254,26 @@ Auth: JWT Bearer token on all protected routes (marked 🔒)
 | PATCH | `/payments/:id/refund/confirm` | 🔒 | Record refund `hive_tx_id` → status `refunded` |
 
 > **Contract cancellation with funded milestones:** `/cancel` only works before any milestone is funded. If a milestone is already escrowed, cooperative refund requires the freelancer to broadcast `escrow_release` back to the client. If the freelancer refuses, the client's funds have no recovery path in MVP — full dispute resolution is Phase 2. `escrow_expiration` does NOT auto-refund; it resolves nothing on its own.
+
+---
+
+### Disputes (Admin Resolver)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/milestones/:id/dispute` | 🔒 | Either party raises `escrow_dispute` via Keychain/KMS → `payments.status = disputed` |
+| PATCH | `/milestones/:id/dispute/confirm` | 🔒 | Record `escrow_dispute` `hive_tx_id` |
+| POST | `/disputes/:id/resolve` | 🔒 (admin) | Authorized team member triggers agent to broadcast `escrow_release` to client or freelancer. Requires `resolution_direction` + `resolution_notes`. Agent uses KMS-held key — same account named in the original `escrow_transfer`. |
+
+> **Protocol constraint:** The resolver must be the same `agent` account named in the original `escrow_transfer` — a separate admin account cannot be introduced after funding. The platform agent IS the resolver. Admin controls are an authorization layer on top of it, not a separate on-chain actor.
+
+---
+
+### Account Claim (Google-provisioned users)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/auth/me/claim-account` | 🔒 | User submits their own owner/active/posting/memo public keys → platform broadcasts `account_update2` rotating all keys to user's keys → platform irreversibly wipes custodial copies from KMS. After this the platform cannot sign for this user. |
 
 ---
 

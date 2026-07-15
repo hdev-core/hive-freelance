@@ -67,7 +67,37 @@ Nobody can release funds to themselves — enforced at the protocol level.
 
 ---
 
-## Full Escrow Flow (MVP Happy Path)
+### 4. `escrow_dispute` — escalates to agent control
+
+Either `from` (client) or `to` (freelancer) can raise a dispute before `escrow_expiration`. Once disputed, **only the agent** can call `escrow_release` — and can send funds to either party.
+
+**Critical protocol constraint:** The resolver must be the **same `agent` account** named in the original `escrow_transfer`. You cannot introduce a separate admin account after funding. The platform agent IS the resolver. Admin/ops controls are an authorization layer on top of the agent, not a separate on-chain actor.
+
+| Parameter | Value |
+|-----------|-------|
+| `from` | Client's Hive username |
+| `to` | Freelancer's Hive username |
+| `agent` | Platform agent account |
+| `escrow_id` | The escrow being disputed |
+| `who` | Either `from` or `to` |
+
+**Key type:** Active (disputing party via Keychain/KMS).
+
+---
+
+### Admin Resolver — Authorization Policy
+
+When a dispute is raised, a team member reviews and authorizes the agent to release funds. This reuses the same KMS-signing + audit path defined for the agent key.
+
+| Step | Detail |
+|------|--------|
+| Authorization | Only designated team members can call `POST /disputes/:id/resolve`. Enforced at the API layer via an allowlist of authorized usernames. |
+| Required fields | `resolution_direction` (`to_client` or `to_freelancer`) + `resolution_notes` (reason for the decision). |
+| Signing | Agent backend constructs `escrow_release` via WAX, signs via KMS, broadcasts. |
+| Audit | Every resolution logged to `disputes` table: who authorized it, the reason, and both `escrow_dispute_tx_id` and `escrow_release_tx_id`. |
+| No direct KMS access | Team members never touch the KMS directly — they submit a resolution via the API, which validates authorization before invoking the KMS signing service. |
+
+---
 
 ```mermaid
 %%{init: {'theme': 'neutral'}}%%
@@ -137,6 +167,9 @@ stateDiagram-v2
     awaiting_ratification --> pending : ratification_deadline passes (protocol auto-refund)
     escrowed --> released : client broadcasts escrow_release to freelancer
     escrowed --> refunded : freelancer broadcasts escrow_release to client (cooperative)
+    escrowed --> disputed : either party broadcasts escrow_dispute
+    disputed --> released : agent broadcasts escrow_release to freelancer (admin decision)
+    disputed --> refunded : agent broadcasts escrow_release to client (admin decision)
 ```
 
 ---
@@ -170,7 +203,13 @@ If the freelancer doesn't approve before `ratification_deadline`, Hive auto-refu
 
 ---
 
-## Agent Account Key — Hardening Requirements
+## Production Hardening Notes
+
+**LIB requirement:** Only update `payments.status` to `escrowed` or `released` after the containing block reaches the Last Irreversible Block (`last_irreversible_block_num` from `get_dynamic_global_properties`). A payment seen in a head block could be on a fork and revert. The listener must hold status updates until the block is confirmed irreversible. This is one of the strongest arguments for migrating to HAF sooner — HAF handles irreversibility automatically.
+
+**Custodial surface — Google user keys:** The KMS holds an active key for every Google-provisioned user, not just the agent account. Apply the same rigor to the full vault: per-user key isolation (separate KMS key per account, not a shared vault key), least-authority signing scope per key, and audit logging on every use. Users must be informed in UX and ToS. The claim/hand-over path (see doc 04) provides the exit to self-custody.
+
+---
 
 The agent account's active key is **the highest-value secret in this system**. It has authority to call `escrow_release` in either direction on any active escrow — it can move all escrowed funds on the platform.
 
@@ -181,3 +220,12 @@ The agent account's active key is **the highest-value secret in this system**. I
 | **Audit logging** | Log every signing event: timestamp, operation type, escrow_id affected, triggering process. Any event not traceable to a known system action triggers an immediate alert. |
 | **Zero balance** | Agent account holds zero HIVE balance. It only signs — never holds funds. |
 | **Key rotation** | Active key rotation requires the owner key (held offline, dual-custody). The active key cannot safely rotate itself out if compromised. |
+
+---
+
+## What Was Intentionally Cut for MVP
+
+| Cut item | Why | Phase 2 |
+|----------|-----|---------|
+| Full agent key rotation runbook | Operational concern; stub documented above | ✓ |
+| Non-custodial claim UI | Backend claim path designed; UI deferred | ✓ |

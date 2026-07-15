@@ -9,8 +9,6 @@ Data is divided into two layers:
 - **Off-chain (PostgreSQL):** relational data — users, profiles, jobs, proposals, contracts, milestones, payments, reviews. Source of truth for the application layer.
 - **On-chain (Hive):** immutable records of critical events — contract creation, milestone approvals, payment releases. The `hive_records` table caches these locally for query performance.
 
-**Out of MVP scope:** disputes, in-app messaging, notifications, skills/categories as structured lookup tables (both use plain text fields for MVP), admin roles, hourly contracts.
-
 ---
 
 ## Design Principles Applied
@@ -24,7 +22,7 @@ Data is divided into two layers:
 
 ---
 
-## Entity Summary (9 tables)
+## Entity Summary (11 tables)
 
 ```
 users ──────────────────────────────────────────────────────
@@ -52,9 +50,11 @@ Core authentication table. Hive username is the identity — no password stored.
 | Column | Type | Constraints | Notes |
 |--------|------|-------------|-------|
 | `id` | BIGSERIAL | PK | |
-| `hive_username` | TEXT | UNIQUE NOT NULL | Primary identity, from Hive Keychain |
-| `email` | TEXT | UNIQUE | Optional, for off-chain notifications |
+| `hive_username` | TEXT | UNIQUE NOT NULL | Primary identity, from Hive Keychain or provisioned by platform |
+| `email` | TEXT | UNIQUE | Required for Google users; optional for Keychain users |
 | `role` | TEXT | NOT NULL CHECK IN ('client','freelancer','both') | |
+| `auth_type` | TEXT | NOT NULL DEFAULT 'keychain' CHECK IN ('keychain','google', 'claimed') | Determines signing method for escrow ops — Keychain (user signs) or custodial (platform signs via KMS) |
+| `kms_key_ref` | TEXT | | KMS reference to stored active key — NULL for Keychain users; populated for Google-provisioned accounts |
 | `created_at` | TIMESTAMP | NOT NULL DEFAULT now() | |
 | `updated_at` | TIMESTAMP | NOT NULL DEFAULT now() | |
 
@@ -74,7 +74,6 @@ Extended per-user info. One record per user.
 | `location` | TEXT | | |
 | `hourly_rate` | NUMERIC(10,2) | CHECK > 0 | For display only in MVP |
 | `skills` | TEXT[] | | Plain text array — no junction table for MVP |
-| `verification_status` | TEXT | NOT NULL DEFAULT 'unverified' CHECK IN ('unverified','pending','verified') | Used for trust/verification badge UI |
 | `created_at` | TIMESTAMP | NOT NULL DEFAULT now() | |
 | `updated_at` | TIMESTAMP | NOT NULL DEFAULT now() | |
 
@@ -178,7 +177,7 @@ Tracks escrow movement. Each row maps to one Hive native escrow operation.
 | `milestone_id` | BIGINT | FK → milestones NOT NULL | |
 | `amount` | NUMERIC(10,2) | NOT NULL CHECK > 0 | |
 | `currency` | TEXT | NOT NULL DEFAULT 'HBD' CHECK IN ('HIVE','HBD') | HBD recommended — dollar-pegged |
-| `status` | TEXT | NOT NULL DEFAULT 'pending' CHECK IN ('pending','awaiting_ratification','escrowed','released','refunded') | `refunded` = cooperative cancellation; freelancer broadcast `escrow_release` back to client |
+| `status` | TEXT | NOT NULL DEFAULT 'pending' CHECK IN ('pending','awaiting_ratification','escrowed','released','refunded','disputed') | `disputed` = escrow_dispute raised, pending admin resolution |
 | `escrow_id` | INT | | Hive native escrow ID |
 | `hive_tx_id` | TEXT | UNIQUE | Each payment maps to exactly one Hive escrow op |
 | `created_at` | TIMESTAMP | NOT NULL DEFAULT now() | |
@@ -187,6 +186,27 @@ Tracks escrow movement. Each row maps to one Hive native escrow operation.
 **Indexes:** `contract_id`, `milestone_id`, `status`
 
 > **Note on `awaiting_ratification`:** this status sits between the client's `escrow_transfer` broadcast and both the freelancer's and agent's `escrow_approve` being confirmed. It is a real protocol state and must be represented.
+
+---
+
+### `disputes`
+Raised when a party calls `escrow_dispute`. The platform agent (same account named in the original `escrow_transfer`) then adjudicates by calling `escrow_release` to either party. Admin authorization is tracked here.
+
+| Column | Type | Constraints | Notes |
+|--------|------|-------------|-------|
+| `id` | BIGSERIAL | PK | |
+| `contract_id` | BIGINT | FK → contracts NOT NULL | |
+| `milestone_id` | BIGINT | FK → milestones NOT NULL | |
+| `raised_by` | BIGINT | FK → users NOT NULL | |
+| `reason` | TEXT | NOT NULL | |
+| `status` | TEXT | NOT NULL DEFAULT 'open' CHECK IN ('open','resolved') | |
+| `resolution_direction` | TEXT | CHECK IN ('to_client','to_freelancer') | Set on resolution |
+| `resolved_by` | TEXT | | Hive username of team member who authorized the release |
+| `resolution_notes` | TEXT | | Logged reason for admin action |
+| `escrow_dispute_tx_id` | TEXT | | On-chain `escrow_dispute` op |
+| `escrow_release_tx_id` | TEXT | | On-chain `escrow_release` op (admin resolution) |
+| `created_at` | TIMESTAMP | NOT NULL DEFAULT now() | |
+| `resolved_at` | TIMESTAMP | | |
 
 ---
 
@@ -231,6 +251,21 @@ Local cache of on-chain operations. Written by the blockchain listener service.
 
 ---
 
+### `oauth_accounts`
+Maps Google OAuth identities to platform users. Enables the Google login path while keeping `hive_username` as the canonical identity for all blockchain operations.
+
+| Column | Type | Constraints | Notes |
+|--------|------|-------------|-------|
+| `id` | BIGSERIAL | PK | |
+| `user_id` | BIGINT | FK → users UNIQUE NOT NULL | One OAuth record per user |
+| `provider` | TEXT | NOT NULL CHECK IN ('google') | Extensible for future providers |
+| `provider_user_id` | TEXT | UNIQUE NOT NULL | Google's stable `sub` field |
+| `created_at` | TIMESTAMP | NOT NULL DEFAULT now() | |
+
+**Indexes:** `provider_user_id` (unique — used on every Google login lookup)
+
+---
+
 ## What Lives On-Chain vs Off-Chain
 
 | Event | On-Chain Operation | Off-Chain Record |
@@ -266,7 +301,6 @@ erDiagram
         text location
         numeric hourly_rate
         text skills
-        text verification_status
         timestamp created_at
         timestamp updated_at
     }
@@ -405,3 +439,16 @@ erDiagram
 | contract → payments | 1:M | |
 | contract → reviews | 1:2 | client reviews freelancer + freelancer reviews client |
 | payment → hive_records | 1:1 | via `hive_tx_id` (UNIQUE on payments) |
+
+---
+
+## What Was Intentionally Cut for MVP
+
+| Cut item | Reason | Phase 2 |
+|----------|--------|---------|
+| `skills` + `user_skills` tables | Junction table overhead; text array sufficient for MVP | ✓ |
+| `categories` + `job_skills` tables | Same reason | ✓ |
+| `messages` table | Users use external messaging for MVP | ✓ |
+| `notifications` table | Requires background job infrastructure | ✓ |
+| `is_super_admin`, `token_valid_after` | Admin governance out of MVP scope | ✓ |
+| `deleted_at` soft deletes | Premature for MVP data volume | ✓ |

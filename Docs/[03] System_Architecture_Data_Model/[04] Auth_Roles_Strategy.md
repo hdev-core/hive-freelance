@@ -18,7 +18,7 @@ All server-side transaction signing uses `@hiveio/wax`. Browser-side Keychain si
 | `freelancer` | Submits proposals, delivers milestones, ratifies escrow, cooperative refunds |
 | `both` | All client AND freelancer permissions. 403 enforced if same user is both client and freelancer on the same contract |
 
-> **MVP note:** No admin role. Dispute resolution and admin dashboards are Phase 2.
+
 
 ---
 
@@ -109,7 +109,38 @@ sequenceDiagram
 
 > **RC delegation is mandatory.** A brand-new Hive account has ~0 Resource Credits and cannot broadcast any transaction. The provisioning service delegates RC immediately on account creation. Without this, all on-chain operations will silently fail for new users.
 
-> **Google users are custodial.** Their active key is held in the KMS and all escrow transactions are signed server-side on their behalf. They never install Keychain.
+> **Google users are custodial by default — but claimable.** Their active key is held in the KMS and all escrow transactions are signed server-side on their behalf. They never install Keychain. However, accounts must be claimable: the user can bring their own keys and take self-custody at any time (see Claim/Hand-over Path below).
+
+> **Custodial surface:** The KMS holds an active key for every Google-provisioned user, not just the platform agent. Apply the same rigor to this vault: per-user key isolation (separate KMS key per account), least-authority signing scope, audit logging on every use. Users must be explicitly informed in UX and ToS that the platform is custodying their keys.
+
+---
+
+### Claim / Hand-over Path (Google-provisioned users → self-custody)
+
+A cross-project standard. Google-provisioned accounts are the user's — the platform holds keys custodially by default but must provide an irreversible exit to self-custody.
+
+```mermaid
+%%{init: {'theme': 'neutral'}}%%
+sequenceDiagram
+    actor User
+    participant React
+    participant API
+    participant KMS
+    participant HiveNode as Hive Node
+
+    User->>React: navigates to "Claim my account"
+    User->>React: provides own owner/active/posting/memo public keys
+    React->>API: POST /auth/me/claim-account {owner_key, active_key, posting_key, memo_key}
+    API->>KMS: retrieve custodial owner key for this user
+    API->>API: construct account_update2 op rotating all keys to user's keys
+    API->>HiveNode: broadcast account_update2 (signed with custodial owner key via KMS)
+    HiveNode-->>API: confirmed
+    API->>KMS: irreversibly delete custodial key material for this user
+    API->>DB: mark user as self-custodial (auth_type = hive_native)
+    API-->>React: "Your account is now fully yours. Install Keychain to continue."
+```
+
+After claim, the platform cannot sign for this user. They must install Hive Keychain (or another signer) for any future on-chain actions. The `account_update2` operation uses the owner key (highest authority) to rotate all four key roles simultaneously — this is why the provisioning service must store the owner key in KMS, not just the active key.
 
 ---
 
@@ -202,5 +233,8 @@ POST /milestones/:id/approve
 | Submit review | `custom_json` | **Posting** | Either party / KMS |
 | Provision account | `account_create` | Active | Provisioning service (wax + KMS) |
 | Delegate RC | `delegate_vesting_shares` | Active | Provisioning service (wax + KMS) |
+| Raise dispute | `escrow_dispute` | Active | Keychain user / KMS (Google user, via wax) |
+| Admin resolve dispute | `escrow_release` | Active | Agent backend (wax + KMS), authorized team member |
+| Claim account | `account_update2` | **Owner** | Platform KMS (custodial owner key) — rotates all keys to user's keys then wipes KMS copies |
 
 > Active key is used only for operations that move or control funds and for provisioning. Using Active key for `custom_json` operations (approval, review) is wrong for Keychain users — it needlessly exposes the higher-privilege key.
