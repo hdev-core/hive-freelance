@@ -15,8 +15,14 @@ export function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [me, setMe] = useState<string | null>(null);
+  const [rcWarning, setRcWarning] = useState<string | null>(null);
 
   useEffect(() => {
+    const stored = sessionStorage.getItem("hf_rc_warning");
+    if (stored) {
+      setRcWarning(stored);
+      sessionStorage.removeItem("hf_rc_warning");
+    }
     void (async () => {
       try {
         const data = await apiFetch<{ items: Job[] }>("/api/v1/jobs");
@@ -41,7 +47,8 @@ export function JobsPage() {
       <p className="lede">
         {me ? (
           <>
-            Signed in as <code>@{me}</code>
+            Signed in as <code>@{me}</code> ·{" "}
+            <Link to="/contracts">Contracts</Link>
           </>
         ) : (
           <>
@@ -49,6 +56,7 @@ export function JobsPage() {
           </>
         )}
       </p>
+      {rcWarning && <p className="notice">{rcWarning}</p>}
       {error && <p className="error">{error}</p>}
       <ul className="job-list">
         {jobs.map((job) => (

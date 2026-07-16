@@ -15,6 +15,16 @@ declare global {
           message?: string;
         }) => void,
       ) => void;
+      requestBroadcast: (
+        username: string,
+        operations: [string, Record<string, unknown>][],
+        keyType: string,
+        cb: (response: {
+          success: boolean;
+          result?: string;
+          message?: string;
+        }) => void,
+      ) => void;
     };
   }
 }

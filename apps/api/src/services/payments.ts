@@ -5,12 +5,21 @@ import {
   type PaymentCurrency,
   type PaymentRow,
 } from "@hive-freelance/db";
-import { agentKeyRef, createKmsSigner } from "@hive-freelance/hive";
 import { AppError } from "../lib/errors.js";
+import { agentAutoApprove, computeEscrowId } from "./agentEscrow.js";
 import { getUserById } from "./users.js";
 
 function agentAccount(): string {
   return process.env.AGENT_ACCOUNT ?? "hive-freelance-agent";
+}
+
+function appId(): string {
+  return process.env.APP_ID ?? "hive-freelance-v1";
+}
+
+/** Trust client confirm for terminal release/refund (demo only). Default: listener owns LIB. */
+function trustClientConfirm(): boolean {
+  return process.env.ESCROW_TRUST_CLIENT_CONFIRM === "true";
 }
 
 async function loadContract(contractId: string): Promise<ContractRow> {
@@ -31,17 +40,28 @@ async function loadPayment(paymentId: string): Promise<PaymentRow> {
   return result.rows[0];
 }
 
-async function nextEscrowId(): Promise<number> {
-  const result = await getPool().query<{ max: number | null }>(
-    `SELECT COALESCE(MAX(escrow_id), 0)::int AS max FROM payments`,
-  );
-  return (result.rows[0]?.max ?? 0) + 1;
+/** Hive datetime: YYYY-MM-DDTHH:mm:ss */
+function toHiveDateTime(d: Date): string {
+  return d.toISOString().replace(/\.\d{3}Z$/, "");
 }
 
-function daysFromNow(days: number): string {
-  const d = new Date();
+function hoursFromNow(hours: number): Date {
+  return new Date(Date.now() + hours * 60 * 60 * 1000);
+}
+
+function addDays(base: Date, days: number): Date {
+  const d = new Date(base);
   d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD for Hive
+  return d;
+}
+
+function signingMode(user: {
+  auth_type: string;
+  kms_key_ref: string | null;
+}): "custodial" | "keychain" {
+  return user.auth_type === "google" && user.kms_key_ref
+    ? "custodial"
+    : "keychain";
 }
 
 export async function listPayments(contractId: string, userId: string) {
@@ -54,6 +74,37 @@ export async function listPayments(contractId: string, userId: string) {
     [contractId],
   );
   return result.rows;
+}
+
+export async function getContractBundle(contractId: string, userId: string) {
+  const contract = await loadContract(contractId);
+  if (contract.client_id !== userId && contract.freelancer_id !== userId) {
+    throw new AppError(403, "Not a party to this contract");
+  }
+  const pool = getPool();
+  const milestones = await pool.query<MilestoneRow>(
+    `SELECT * FROM milestones WHERE contract_id = $1 ORDER BY milestone_order ASC`,
+    [contractId],
+  );
+  const payments = await pool.query<PaymentRow>(
+    `SELECT * FROM payments WHERE contract_id = $1 ORDER BY created_at ASC`,
+    [contractId],
+  );
+  const client = await getUserById(contract.client_id);
+  const freelancer = await getUserById(contract.freelancer_id);
+  return {
+    contract,
+    milestones: milestones.rows,
+    payments: payments.rows,
+    parties: {
+      client: client
+        ? { id: client.id, hive_username: client.hive_username }
+        : null,
+      freelancer: freelancer
+        ? { id: freelancer.id, hive_username: freelancer.hive_username }
+        : null,
+    },
+  };
 }
 
 export async function fundMilestone(
@@ -78,11 +129,35 @@ export async function fundMilestone(
     throw new AppError(400, "Milestone is not pending funding");
   }
 
-  const existing = await pool.query(
-    `SELECT 1 FROM payments WHERE milestone_id = $1 LIMIT 1`,
+  // Allow re-fund only when prior payment was reset (missed ratification / refunded pending).
+  const blocking = await pool.query(
+    `
+    SELECT 1 FROM payments
+    WHERE milestone_id = $1
+      AND status NOT IN ('pending', 'refunded')
+    LIMIT 1
+    `,
     [milestoneId],
   );
-  if ((existing.rowCount ?? 0) > 0) {
+  if ((blocking.rowCount ?? 0) > 0) {
+    throw new AppError(409, "Active payment already exists for this milestone");
+  }
+
+  // Close stale pending rows from missed ratification so a fresh fund can proceed.
+  await pool.query(
+    `
+    UPDATE payments
+    SET status = 'refunded'
+    WHERE milestone_id = $1 AND status = 'pending' AND hive_tx_id IS NOT NULL
+    `,
+    [milestoneId],
+  );
+
+  const stillPending = await pool.query(
+    `SELECT 1 FROM payments WHERE milestone_id = $1 AND status = 'pending' LIMIT 1`,
+    [milestoneId],
+  );
+  if ((stillPending.rowCount ?? 0) > 0) {
     throw new AppError(409, "Payment already exists for this milestone");
   }
 
@@ -92,22 +167,46 @@ export async function fundMilestone(
     throw new AppError(500, "Contract parties missing");
   }
 
-  const escrowId = await nextEscrowId();
-  const amount = Number(milestone.amount).toFixed(3);
-  const amountStr = `${amount} ${currency}`;
+  const ratificationDeadline = hoursFromNow(24);
+  const endBase = contract.end_date
+    ? new Date(contract.end_date)
+    : new Date();
+  const escrowExpiration = addDays(endBase, 30);
 
+  // Insert first to get payment id, then compute escrow_id and update.
   const paymentRes = await pool.query<PaymentRow>(
     `
-    INSERT INTO payments (contract_id, milestone_id, amount, currency, status, escrow_id)
-    VALUES ($1, $2, $3, $4, 'pending', $5)
+    INSERT INTO payments (
+      contract_id, milestone_id, amount, currency, status,
+      ratification_deadline, escrow_expiration
+    )
+    VALUES ($1, $2, $3, $4, 'pending', $5, $6)
     RETURNING *
     `,
-    [contractId, milestoneId, milestone.amount, currency, escrowId],
+    [
+      contractId,
+      milestoneId,
+      milestone.amount,
+      currency,
+      ratificationDeadline,
+      escrowExpiration,
+    ],
   );
   const payment = paymentRes.rows[0]!;
 
-  const ratificationDeadline = daysFromNow(2);
-  const escrowExpiration = daysFromNow(30);
+  const escrowId = await computeEscrowId(
+    payment.id,
+    clientUser.hive_username,
+    freelancerUser.hive_username,
+  );
+  await pool.query(`UPDATE payments SET escrow_id = $2 WHERE id = $1`, [
+    payment.id,
+    escrowId,
+  ]);
+  payment.escrow_id = escrowId;
+
+  const amount = Number(milestone.amount).toFixed(3);
+  const amountStr = `${amount} ${currency}`;
 
   const escrow_transfer = {
     from: clientUser.hive_username,
@@ -117,25 +216,32 @@ export async function fundMilestone(
     hbd_amount: currency === "HBD" ? amountStr : "0.000 HBD",
     hive_amount: currency === "HIVE" ? amountStr : "0.000 HIVE",
     fee: "0.000 HBD",
-    ratification_deadline: ratificationDeadline,
-    escrow_expiration: escrowExpiration,
+    ratification_deadline: toHiveDateTime(ratificationDeadline),
+    escrow_expiration: toHiveDateTime(escrowExpiration),
     json_meta: JSON.stringify({
-      app_id: process.env.APP_ID ?? "hive-freelance-v1",
-      payment_id: payment.id,
-      milestone_id: milestoneId,
+      app: appId(),
       contract_id: contractId,
+      milestone_id: milestoneId,
+      payment_id: payment.id,
     }),
   };
 
-  const mode =
-    clientUser.auth_type === "google" && clientUser.kms_key_ref
-      ? ("custodial" as const)
-      : ("keychain" as const);
-
-  return { payment, escrow_transfer, mode };
+  return {
+    payment,
+    escrow_transfer,
+    mode: signingMode(clientUser),
+  };
 }
 
-export async function confirmFund(paymentId: string, clientId: string, hiveTxId: string) {
+export async function confirmFund(
+  paymentId: string,
+  clientId: string,
+  hiveTxId: string,
+) {
+  if (!hiveTxId?.trim()) {
+    throw new AppError(400, "hive_tx_id is required");
+  }
+
   const payment = await loadPayment(paymentId);
   const contract = await loadContract(payment.contract_id);
   if (contract.client_id !== clientId) {
@@ -152,40 +258,26 @@ export async function confirmFund(paymentId: string, clientId: string, hiveTxId:
     WHERE id = $1
     RETURNING *
     `,
-    [paymentId, hiveTxId],
+    [paymentId, hiveTxId.trim()],
   );
+  const row = updated.rows[0]!;
 
-  // Agent auto-approve hook (dry-run via KMS stub until escrow doc hardening)
-  try {
-    const kms = createKmsSigner();
-    const keyRef = agentKeyRef();
-    const has = await kms.hasKey(keyRef).catch(() => false);
-    if (has) {
-      await kms.signWithKms(agentAccount(), keyRef, [
-        {
-          escrow_approve: {
-            from: "client",
-            to: "freelancer",
-            agent: agentAccount(),
-            who: agentAccount(),
-            escrow_id: payment.escrow_id,
-            approve: true,
-          },
-        },
-      ]);
-      console.info(
-        `[payments] agent escrow_approve dry-run for payment ${paymentId}`,
-      );
-    } else {
-      console.info(
-        `[payments] agent key not configured — skip escrow_approve stub for ${paymentId}`,
-      );
+  const clientUser = await getUserById(contract.client_id);
+  const freelancerUser = await getUserById(contract.freelancer_id);
+  if (clientUser && freelancerUser && row.escrow_id != null) {
+    try {
+      await agentAutoApprove({
+        paymentId: row.id,
+        escrowId: row.escrow_id,
+        from: clientUser.hive_username,
+        to: freelancerUser.hive_username,
+      });
+    } catch (err) {
+      console.warn("[payments] agent auto-approve failed:", err);
     }
-  } catch (err) {
-    console.warn("[payments] agent approve stub failed:", err);
   }
 
-  return updated.rows[0]!;
+  return loadPayment(paymentId);
 }
 
 export async function ratifyPayload(paymentId: string, freelancerId: string) {
@@ -211,10 +303,7 @@ export async function ratifyPayload(paymentId: string, freelancerId: string) {
       escrow_id: payment.escrow_id,
       approve: true,
     },
-    mode:
-      freelancerUser!.auth_type === "google" && freelancerUser!.kms_key_ref
-        ? ("custodial" as const)
-        : ("keychain" as const),
+    mode: signingMode(freelancerUser!),
   };
 }
 
@@ -223,29 +312,58 @@ export async function confirmRatify(
   freelancerId: string,
   hiveTxId: string,
 ) {
+  if (!hiveTxId?.trim()) {
+    throw new AppError(400, "hive_tx_id is required");
+  }
+
   const payment = await loadPayment(paymentId);
   const contract = await loadContract(payment.contract_id);
   if (contract.freelancer_id !== freelancerId) {
     throw new AppError(403, "Only the freelancer can confirm ratify");
   }
+  if (payment.status !== "awaiting_ratification") {
+    throw new AppError(400, `Payment status is ${payment.status}`);
+  }
 
-  // Off-chain mark: listener will set escrowed at LIB when both approves seen.
-  // For API UX we also bump milestone to funded when ratify confirmed.
-  const pool = getPool();
-  await pool.query(
+  const updated = await getPool().query<PaymentRow>(
     `
-    UPDATE milestones SET status = 'funded'
-    WHERE id = $1 AND status = 'pending'
+    UPDATE payments
+    SET freelancer_approve_tx_id = $2
+    WHERE id = $1
+    RETURNING *
     `,
-    [payment.milestone_id],
+    [paymentId, hiveTxId.trim()],
   );
+  const row = updated.rows[0]!;
 
-  // Store freelancer approve tx in json_meta-style via hive_records later;
-  // keep payment awaiting_ratification until listener confirms both sides / LIB.
+  // Local dry demo: both approve tx refs exist without chain LIB — promote escrowed.
+  if (
+    process.env.ESCROW_DRY_DEMO === "true" &&
+    row.agent_approve_tx_id &&
+    row.freelancer_approve_tx_id
+  ) {
+    await getPool().query(
+      `UPDATE payments SET status = 'escrowed' WHERE id = $1`,
+      [paymentId],
+    );
+    await getPool().query(
+      `
+      UPDATE milestones SET status = 'funded'
+      WHERE id = $1 AND status IN ('pending', 'funded')
+      `,
+      [payment.milestone_id],
+    );
+    console.info(
+      `[payments] ESCROW_DRY_DEMO both approves → escrowed payment=${paymentId}`,
+    );
+    return loadPayment(paymentId);
+  }
+
+  // Do not set escrowed here — listener requires both approves at LIB.
   console.info(
     `[payments] freelancer ratify confirmed payment=${paymentId} tx=${hiveTxId}`,
   );
-  return payment;
+  return row;
 }
 
 export async function releasePayload(paymentId: string, clientId: string) {
@@ -253,9 +371,6 @@ export async function releasePayload(paymentId: string, clientId: string) {
   const contract = await loadContract(payment.contract_id);
   if (contract.client_id !== clientId) {
     throw new AppError(403, "Only the client can release");
-  }
-  if (!["escrowed", "awaiting_ratification"].includes(payment.status)) {
-    // Allow release attempt after escrowed; awaiting only if already funded path
   }
   if (payment.status !== "escrowed") {
     throw new AppError(400, `Payment must be escrowed (is ${payment.status})`);
@@ -278,10 +393,7 @@ export async function releasePayload(paymentId: string, clientId: string) {
       hbd_amount: payment.currency === "HBD" ? amountStr : "0.000 HBD",
       hive_amount: payment.currency === "HIVE" ? amountStr : "0.000 HIVE",
     },
-    mode:
-      clientUser!.auth_type === "google" && clientUser!.kms_key_ref
-        ? ("custodial" as const)
-        : ("keychain" as const),
+    mode: signingMode(clientUser!),
   };
 }
 
@@ -290,24 +402,50 @@ export async function confirmRelease(
   clientId: string,
   hiveTxId: string,
 ) {
+  if (!hiveTxId?.trim()) {
+    throw new AppError(400, "hive_tx_id is required");
+  }
+
   const payment = await loadPayment(paymentId);
   const contract = await loadContract(payment.contract_id);
   if (contract.client_id !== clientId) {
     throw new AppError(403, "Only the client can confirm release");
   }
+  if (payment.status !== "escrowed") {
+    throw new AppError(400, `Payment must be escrowed (is ${payment.status})`);
+  }
 
   const pool = getPool();
+  if (trustClientConfirm()) {
+    const updated = await pool.query<PaymentRow>(
+      `
+      UPDATE payments
+      SET status = 'released',
+          release_tx_id = $2,
+          hive_tx_id = COALESCE($2, hive_tx_id)
+      WHERE id = $1
+      RETURNING *
+      `,
+      [paymentId, hiveTxId.trim()],
+    );
+    await pool.query(
+      `UPDATE milestones SET status = 'released' WHERE id = $1`,
+      [payment.milestone_id],
+    );
+    return updated.rows[0]!;
+  }
+
   const updated = await pool.query<PaymentRow>(
     `
-    UPDATE payments SET status = 'released', hive_tx_id = COALESCE($2, hive_tx_id)
+    UPDATE payments
+    SET release_tx_id = $2
     WHERE id = $1
     RETURNING *
     `,
-    [paymentId, hiveTxId],
+    [paymentId, hiveTxId.trim()],
   );
-  await pool.query(
-    `UPDATE milestones SET status = 'released' WHERE id = $1`,
-    [payment.milestone_id],
+  console.info(
+    `[payments] release tx recorded; awaiting LIB listener for payment=${paymentId}`,
   );
   return updated.rows[0]!;
 }
@@ -339,10 +477,7 @@ export async function refundPayload(paymentId: string, freelancerId: string) {
       hbd_amount: payment.currency === "HBD" ? amountStr : "0.000 HBD",
       hive_amount: payment.currency === "HIVE" ? amountStr : "0.000 HIVE",
     },
-    mode:
-      freelancerUser!.auth_type === "google" && freelancerUser!.kms_key_ref
-        ? ("custodial" as const)
-        : ("keychain" as const),
+    mode: signingMode(freelancerUser!),
   };
 }
 
@@ -351,23 +486,50 @@ export async function confirmRefund(
   freelancerId: string,
   hiveTxId: string,
 ) {
+  if (!hiveTxId?.trim()) {
+    throw new AppError(400, "hive_tx_id is required");
+  }
+
   const payment = await loadPayment(paymentId);
   const contract = await loadContract(payment.contract_id);
   if (contract.freelancer_id !== freelancerId) {
     throw new AppError(403, "Only the freelancer can confirm refund");
   }
+  if (payment.status !== "escrowed") {
+    throw new AppError(400, `Payment must be escrowed (is ${payment.status})`);
+  }
 
-  const updated = await getPool().query<PaymentRow>(
+  const pool = getPool();
+  if (trustClientConfirm()) {
+    const updated = await pool.query<PaymentRow>(
+      `
+      UPDATE payments
+      SET status = 'refunded',
+          release_tx_id = $2,
+          hive_tx_id = COALESCE($2, hive_tx_id)
+      WHERE id = $1
+      RETURNING *
+      `,
+      [paymentId, hiveTxId.trim()],
+    );
+    await pool.query(
+      `UPDATE milestones SET status = 'pending' WHERE id = $1`,
+      [payment.milestone_id],
+    );
+    return updated.rows[0]!;
+  }
+
+  const updated = await pool.query<PaymentRow>(
     `
-    UPDATE payments SET status = 'refunded', hive_tx_id = COALESCE($2, hive_tx_id)
+    UPDATE payments
+    SET release_tx_id = $2
     WHERE id = $1
     RETURNING *
     `,
-    [paymentId, hiveTxId],
+    [paymentId, hiveTxId.trim()],
   );
-  await getPool().query(
-    `UPDATE milestones SET status = 'pending' WHERE id = $1`,
-    [payment.milestone_id],
+  console.info(
+    `[payments] refund tx recorded; awaiting LIB listener for payment=${paymentId}`,
   );
   return updated.rows[0]!;
 }
@@ -388,11 +550,11 @@ export async function executeCustodialSign(
   }
 
   const live = process.env.CUSTODIAL_LIVE === "true";
+  const { createKmsSigner } = await import("@hive-freelance/hive");
   const kms = createKmsSigner();
   try {
     await kms.signWithKms(user.hive_username, user.kms_key_ref, ops);
   } catch (err) {
-    // Local vault may only have presence flags — allow dry-run without env key material
     if (live) throw err;
     console.warn("[payments] custodial sign stub (no vault key material):", err);
   }
@@ -405,7 +567,7 @@ export async function executeCustodialSign(
     dryRun: !live,
     hive_tx_id,
     message: live
-      ? "Custodial broadcast path invoked (wire full WAX broadcast in escrow hardening)"
+      ? "Custodial broadcast path invoked (wire full WAX broadcast in production)"
       : "Dry-run custodial sign — set CUSTODIAL_LIVE=true for live path",
   };
 }

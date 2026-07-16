@@ -34,10 +34,23 @@ export async function getContract(contractId: string, userId: string) {
     [contractId],
   );
 
+  const client = await pool.query<{ id: string; hive_username: string }>(
+    `SELECT id, hive_username FROM users WHERE id = $1`,
+    [contract.client_id],
+  );
+  const freelancer = await pool.query<{ id: string; hive_username: string }>(
+    `SELECT id, hive_username FROM users WHERE id = $1`,
+    [contract.freelancer_id],
+  );
+
   return {
     ...contract,
     milestones: milestones.rows,
     payments: payments.rows,
+    parties: {
+      client: client.rows[0] ?? null,
+      freelancer: freelancer.rows[0] ?? null,
+    },
   };
 }
 

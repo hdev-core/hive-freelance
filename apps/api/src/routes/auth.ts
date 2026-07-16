@@ -3,7 +3,11 @@ import { z } from "zod";
 import type { UserRole } from "@hive-freelance/db";
 import { AppError, asyncHandler } from "../lib/errors.js";
 import { createChallenge, consumeChallenge } from "../lib/challengeStore.js";
-import { getHiveAccount, verifyPostingSignature } from "../lib/hiveAuth.js";
+import {
+  getAccountRcStatus,
+  getHiveAccount,
+  verifyPostingSignature,
+} from "../lib/hiveAuth.js";
 import {
   cookieOptions,
   JWT_COOKIE,
@@ -101,7 +105,14 @@ authRouter.post(
       user = await updateUserRole(user.id, body.role);
     }
 
-    res.json(issueSession(res, user));
+    const rc = await getAccountRcStatus(username);
+    res.json({
+      ...issueSession(res, user),
+      rc_warning: rc?.warning ?? null,
+      rc: rc
+        ? { pct: rc.pct, low: rc.low, max_mana: rc.max_mana }
+        : null,
+    });
   }),
 );
 

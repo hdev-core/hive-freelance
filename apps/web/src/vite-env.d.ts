@@ -7,3 +7,27 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+type KeychainResponse = {
+  success: boolean;
+  result?: string;
+  message?: string;
+};
+
+interface Window {
+  hive_keychain?: {
+    requestHandshake: (cb: () => void) => void;
+    requestSignBuffer: (
+      username: string,
+      message: string,
+      keyType: string,
+      cb: (response: KeychainResponse) => void,
+    ) => void;
+    requestBroadcast: (
+      username: string,
+      operations: [string, Record<string, unknown>][],
+      keyType: string,
+      cb: (response: KeychainResponse) => void,
+    ) => void;
+  };
+}

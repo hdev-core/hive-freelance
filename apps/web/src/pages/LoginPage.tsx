@@ -7,6 +7,7 @@ type AuthResponse = {
   user: { id: string; username: string; role: string; authType?: string };
   provisioned?: boolean;
   warning?: string;
+  rc_warning?: string | null;
 };
 
 export function LoginPage() {
@@ -65,10 +66,14 @@ export function LoginPage() {
       });
 
       setStatus("Verifying…");
-      await apiFetch<AuthResponse>("/api/v1/auth/verify", {
+      const verified = await apiFetch<AuthResponse>("/api/v1/auth/verify", {
         method: "POST",
         body: JSON.stringify({ username: u, signature, challenge, role }),
       });
+      if (verified.rc_warning) {
+        sessionStorage.setItem("hf_rc_warning", verified.rc_warning);
+        setNotice(verified.rc_warning);
+      }
       setStatus("Logged in");
       navigate("/jobs");
     } catch (err) {

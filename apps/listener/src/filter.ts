@@ -22,14 +22,36 @@ function customJsonMatchesApp(payload: Record<string, unknown>): boolean {
   const json = payload.json;
   if (typeof json === "string") {
     try {
-      const parsed = JSON.parse(json) as { app_id?: string };
-      return parsed.app_id === APP_ID;
+      const parsed = JSON.parse(json) as { app_id?: string; app?: string };
+      return parsed.app_id === APP_ID || parsed.app === APP_ID;
     } catch {
       return false;
     }
   }
-  if (json && typeof json === "object" && "app_id" in json) {
-    return (json as { app_id?: string }).app_id === APP_ID;
+  if (json && typeof json === "object") {
+    const obj = json as { app_id?: string; app?: string };
+    return obj.app_id === APP_ID || obj.app === APP_ID;
+  }
+  return false;
+}
+
+function agentAccount(): string {
+  return process.env.AGENT_ACCOUNT ?? "hive-freelance-agent";
+}
+
+/** Keep escrow ops that name our agent or carry our app json_meta. */
+function escrowMatchesPlatform(payload: Record<string, unknown>): boolean {
+  const agent = payload.agent;
+  if (typeof agent === "string" && agent === agentAccount()) return true;
+
+  const metaRaw = payload.json_meta;
+  if (typeof metaRaw === "string") {
+    try {
+      const meta = JSON.parse(metaRaw) as { app?: string; app_id?: string };
+      return meta.app === APP_ID || meta.app_id === APP_ID;
+    } catch {
+      return false;
+    }
   }
   return false;
 }
@@ -52,8 +74,10 @@ export function filterBlockOps(
         continue;
       }
 
-      // Escrow ops are always relevant when they involve our agent later;
-      // for scaffold we store all escrow_* seen (narrow with agent filter in escrow milestone).
+      if (ESCROW_SET.has(opType) && !escrowMatchesPlatform(payload)) {
+        continue;
+      }
+
       if (
         !ESCROW_SET.has(opType) &&
         opType !== "custom_json" &&

@@ -112,6 +112,11 @@ export type PaymentRow = {
   status: PaymentStatus;
   escrow_id: number | null;
   hive_tx_id: string | null;
+  freelancer_approve_tx_id?: string | null;
+  agent_approve_tx_id?: string | null;
+  release_tx_id?: string | null;
+  ratification_deadline?: Date | null;
+  escrow_expiration?: Date | null;
   created_at: Date;
   updated_at: Date;
 };

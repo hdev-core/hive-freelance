@@ -10,7 +10,10 @@ import {
 } from "@hive-freelance/db";
 import { createChain } from "@hive-freelance/hive";
 import { filterBlockOps } from "./filter.js";
-import { syncPaymentFromEscrowOp } from "./paymentSync.js";
+import {
+  resetMissedRatifications,
+  syncPaymentFromEscrowOp,
+} from "./paymentSync.js";
 
 const rootDir = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
 loadEnv({ path: resolve(rootDir, ".env") });
@@ -97,6 +100,11 @@ async function tick(): Promise<void> {
       console.log(
         `[listener] marked ${confirmedCount} record(s) confirmed at LIB=${lib}`,
       );
+    }
+
+    const missed = await resetMissedRatifications();
+    if (missed > 0) {
+      console.log(`[listener] reset ${missed} missed-ratification payment(s)`);
     }
   } finally {
     await chain.close();

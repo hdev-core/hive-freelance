@@ -81,3 +81,59 @@ export async function verifyPostingSignature(
 
   return false;
 }
+
+export type RcStatus = {
+  username: string;
+  current_mana: number;
+  max_mana: number;
+  pct: number;
+  low: boolean;
+  warning: string | null;
+};
+
+/** Approximate RC via rc_api.find_rc_accounts (MVP warning only). */
+export async function getAccountRcStatus(
+  username: string,
+): Promise<RcStatus | null> {
+  const name = username.trim().toLowerCase();
+  try {
+    const res = await fetch(apiNode(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "rc_api.find_rc_accounts",
+        params: { accounts: [name] },
+      }),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as JsonRpcResult<{
+      rc_accounts?: Array<{
+        account: string;
+        rc_manabar?: { current_mana: string | number };
+        max_rc?: string | number;
+      }>;
+    }>;
+    const acct = body.result?.rc_accounts?.[0];
+    if (!acct) return null;
+
+    const current = Number(acct.rc_manabar?.current_mana ?? 0);
+    const max = Number(acct.max_rc ?? 0);
+    const pct = max > 0 ? (current / max) * 100 : 100;
+    const threshold = Number(process.env.RC_WARNING_PCT ?? 5);
+    const low = pct < threshold;
+    return {
+      username: name,
+      current_mana: current,
+      max_mana: max,
+      pct,
+      low,
+      warning: low
+        ? `Resource Credits look low (~${pct.toFixed(1)}%). Escrow Active ops may fail — ask the platform to delegate RC.`
+        : null,
+    };
+  } catch {
+    return null;
+  }
+}
