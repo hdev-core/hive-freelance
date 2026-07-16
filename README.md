@@ -40,6 +40,9 @@ npm run dev
 - API health: http://localhost:4000/health  
 - Hive health: http://localhost:4000/api/v1/health/hive  
 - Keychain smoke UI: http://localhost:5173/keychain  
+- Login / jobs smoke UI: http://localhost:5173/login · http://localhost:5173/jobs  
+
+API MVP details: [`Docs/[02] Additional Docs/[06] API_MVP_Guide.md`](Docs/[02]%20Additional%20Docs/[06]%20API_MVP_Guide.md).
 
 ## Scripts
 
@@ -47,7 +50,7 @@ npm run dev
 |---------|----------------|
 | `npm run dev` | API + web + listener |
 | `npm run dev:api` | API only |
-| `npm run db:migrate` | Apply SQL migrations in `packages/db/migrations` |
+| `npm run db:migrate` | Apply SQL migrations (`001` bootstrap + `002` marketplace schema) |
 | `npm run build` | Build all workspaces |
 
 ## Secrets

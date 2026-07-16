@@ -5,7 +5,7 @@
 
 This document explains how the stack runs locally: what lives in Docker, what runs on your machine, how to open the app UI, and how to inspect PostgreSQL.
 
-Related: root [`README.md`](../../README.md), [`[01] Tech_Stack.md`](../[03]%20System_Architecture_Data_Model/[01]%20Tech_Stack.md).
+Related: root [`README.md`](../../README.md), [`[01] Tech_Stack.md`](../[03]%20System_Architecture_Data_Model/[01]%20Tech_Stack.md), [`[05] Database_Guide.md`](./[05]%20Database_Guide.md), [`[06] API_MVP_Guide.md`](./[06]%20API_MVP_Guide.md).
 
 ---
 
@@ -145,19 +145,29 @@ A `pgadmin` service can be added to `docker-compose.yml` so a browser UI is avai
 
 ---
 
-## What’s in the DB after bootstrap migrate
+## What’s in the DB after migrate
 
-Tech-stack scaffold tables (full marketplace schema from doc 02 comes later):
+After `001_bootstrap.sql` + `002_marketplace_schema.sql` (`npm run db:migrate`):
 
 | Table | Purpose |
 |-------|---------|
 | `users` | Hive identity (`hive_username`, `auth_type`, …) |
 | `oauth_accounts` | Google ↔ user mapping |
+| `profiles` | Per-user bio, skills, rates |
+| `jobs` | Client job listings |
+| `proposals` | Freelancer bids on jobs |
+| `contracts` | Accepted proposal → active engagement |
+| `milestones` | Fundable stages within a contract |
+| `payments` | Escrow payment rows (HBD default) |
+| `disputes` | Manual admin escrow dispute / resolution |
+| `reviews` | Mutual ratings after completion |
 | `hive_records` | Cached on-chain ops from the listener |
 | `listener_state` | Last processed block cursor |
 | `schema_migrations` | Which migration files have been applied |
 
-Not yet created: `profiles`, `jobs`, `proposals`, `contracts`, `milestones`, `payments`, `reviews` (see DB schema doc).
+Intentionally deferred (MVP cuts): messages, notifications, skill/category junction tables.
+
+Schema source: [`[02] DB_Schema_and_ER_Diagram.md`](../[03]%20System_Architecture_Data_Model/[02]%20DB_Schema_and_ER_Diagram.md).
 
 ---
 

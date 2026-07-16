@@ -119,3 +119,32 @@ input {
   border-radius: 8px;
   overflow: auto;
 }
+
+.job-list {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem 0 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.job-list li {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem;
+  background: white;
+}
+
+.job-list span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  min-width: 10rem;
+}

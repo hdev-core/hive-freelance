@@ -1,23 +1,12 @@
 import { Router } from "express";
+import { requireAuth } from "../middleware/auth.js";
 
-/** Reserved mounts — return 501 until feature docs are implemented. */
-export const stubRouter = Router();
+export const stubsRouter = Router();
 
-const notImplemented = (_req: unknown, res: { status: (n: number) => { json: (b: unknown) => void } }) => {
-  res.status(501).json({ error: "Not implemented yet", phase: "post-scaffold" });
-};
+stubsRouter.post("/disputes/:id/resolve", requireAuth, (_req, res) => {
+  res.status(501).json({ error: "Disputes not implemented in MVP slice" });
+});
 
-stubRouter.all("/auth", notImplemented);
-stubRouter.all("/auth/*", notImplemented);
-stubRouter.all("/users", notImplemented);
-stubRouter.all("/users/*", notImplemented);
-stubRouter.all("/jobs", notImplemented);
-stubRouter.all("/jobs/*", notImplemented);
-stubRouter.all("/proposals", notImplemented);
-stubRouter.all("/proposals/*", notImplemented);
-stubRouter.all("/contracts", notImplemented);
-stubRouter.all("/contracts/*", notImplemented);
-stubRouter.all("/milestones", notImplemented);
-stubRouter.all("/milestones/*", notImplemented);
-stubRouter.all("/payments", notImplemented);
-stubRouter.all("/payments/*", notImplemented);
+stubsRouter.post("/contracts/:id/reviews", requireAuth, (_req, res) => {
+  res.status(501).json({ error: "Reviews not implemented in MVP slice" });
+});

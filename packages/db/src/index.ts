@@ -3,6 +3,32 @@ import { getPool } from "./pool.js";
 export { closePool, getPool, pingDb } from "./pool.js";
 export type { Pool, PoolClient } from "./pool.js";
 
+export type {
+  AuthType,
+  ContractRow,
+  ContractStatus,
+  DisputeRow,
+  DisputeStatus,
+  HiveRecordRow,
+  JobRow,
+  JobStatus,
+  ListenerStateRow,
+  MilestoneRow,
+  MilestoneStatus,
+  OAuthAccountRow,
+  OAuthProvider,
+  PaymentCurrency,
+  PaymentRow,
+  PaymentStatus,
+  ProfileRow,
+  ProposalRow,
+  ProposalStatus,
+  ResolutionDirection,
+  ReviewRow,
+  UserRole,
+  UserRow,
+} from "./types.js";
+
 export type HiveRecordInsert = {
   hive_tx_id: string;
   app_id: string;
