@@ -76,7 +76,6 @@ export function requireRole(...roles: UserRole[]) {
   };
 }
 
-/** Client actions: role client or both */
 export function requireClient(
   req: Request,
   res: Response,
@@ -85,11 +84,24 @@ export function requireClient(
   requireRole("client", "both")(req, res, next);
 }
 
-/** Freelancer actions: role freelancer or both */
 export function requireFreelancer(
   req: Request,
   res: Response,
   next: NextFunction,
 ): void {
   requireRole("freelancer", "both")(req, res, next);
+}
+
+/** 403 if the same user would be both client and freelancer on one contract. */
+export function assertNotSelfContract(
+  clientId: string,
+  freelancerId: string,
+): void {
+  if (clientId === freelancerId) {
+    throw new AppError(
+      403,
+      "Cannot be both client and freelancer on the same contract",
+      "SELF_CONTRACT",
+    );
+  }
 }

@@ -5,7 +5,7 @@
 
 This document explains how the stack runs locally: what lives in Docker, what runs on your machine, how to open the app UI, and how to inspect PostgreSQL.
 
-Related: root [`README.md`](../../README.md), [`[01] Tech_Stack.md`](../[03]%20System_Architecture_Data_Model/[01]%20Tech_Stack.md), [`[05] Database_Guide.md`](./[05]%20Database_Guide.md), [`[06] API_MVP_Guide.md`](./[06]%20API_MVP_Guide.md).
+Related: root [`README.md`](../../README.md), [`[01] Tech_Stack.md`](../[03]%20System_Architecture_Data_Model/[01]%20Tech_Stack.md), [`[05] Database_Guide.md`](./[05]%20Database_Guide.md), [`[06] API_MVP_Guide.md`](./[06]%20API_MVP_Guide.md), [`[07] Auth_Guide.md`](./[07]%20Auth_Guide.md).
 
 ---
 

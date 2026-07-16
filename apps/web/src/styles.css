@@ -112,6 +112,31 @@ input {
   color: #b00040;
 }
 
+.notice {
+  background: #fff0f8;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--ink);
+}
+
+.sep {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1.5rem 0;
+}
+
+.claim-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.claim-form input {
+  width: 100%;
+  min-width: 0;
+}
+
 .detail {
   background: #1c0b2e;
   color: #ffe8f5;

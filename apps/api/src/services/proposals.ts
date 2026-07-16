@@ -135,6 +135,15 @@ export async function acceptProposal(proposalId: string, clientId: string) {
       [proposal.job_id],
     );
 
+    // Import dynamically to avoid circular issues — use assert at accept time
+    if (job.client_id === proposal.freelancer_id) {
+      throw new AppError(
+        403,
+        "Cannot be both client and freelancer on the same contract",
+        "SELF_CONTRACT",
+      );
+    }
+
     const contractRes = await client.query<ContractRow>(
       `
       INSERT INTO contracts (

@@ -25,10 +25,10 @@ export function JobsPage() {
         setError(err instanceof Error ? err.message : String(err));
       }
       try {
-        const auth = await apiFetch<{ user: { hiveUsername: string } }>(
+        const auth = await apiFetch<{ user: { username: string } }>(
           "/api/v1/auth/me",
         );
-        setMe(auth.user.hiveUsername);
+        setMe(auth.user.username);
       } catch {
         setMe(null);
       }

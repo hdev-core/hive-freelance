@@ -12,6 +12,7 @@ import {
   confirmRatify,
   confirmRefund,
   confirmRelease,
+  executeCustodialSign,
   ratifyPayload,
   refundPayload,
   releasePayload,
@@ -108,5 +109,26 @@ paymentsRouter.patch(
       body.hive_tx_id,
     );
     res.json(payment);
+  }),
+);
+
+paymentsRouter.post(
+  "/:id/custodial-sign",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        op: z.enum([
+          "escrow_transfer",
+          "escrow_approve",
+          "escrow_release",
+        ]),
+        payload: z.record(z.string(), z.unknown()),
+      })
+      .parse(req.body);
+    const result = await executeCustodialSign(req.user!.id, body.op, [
+      { [body.op]: body.payload },
+    ]);
+    res.json(result);
   }),
 );

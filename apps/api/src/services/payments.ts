@@ -127,7 +127,12 @@ export async function fundMilestone(
     }),
   };
 
-  return { payment, escrow_transfer };
+  const mode =
+    clientUser.auth_type === "google" && clientUser.kms_key_ref
+      ? ("custodial" as const)
+      : ("keychain" as const);
+
+  return { payment, escrow_transfer, mode };
 }
 
 export async function confirmFund(paymentId: string, clientId: string, hiveTxId: string) {
@@ -206,6 +211,10 @@ export async function ratifyPayload(paymentId: string, freelancerId: string) {
       escrow_id: payment.escrow_id,
       approve: true,
     },
+    mode:
+      freelancerUser!.auth_type === "google" && freelancerUser!.kms_key_ref
+        ? ("custodial" as const)
+        : ("keychain" as const),
   };
 }
 
@@ -269,6 +278,10 @@ export async function releasePayload(paymentId: string, clientId: string) {
       hbd_amount: payment.currency === "HBD" ? amountStr : "0.000 HBD",
       hive_amount: payment.currency === "HIVE" ? amountStr : "0.000 HIVE",
     },
+    mode:
+      clientUser!.auth_type === "google" && clientUser!.kms_key_ref
+        ? ("custodial" as const)
+        : ("keychain" as const),
   };
 }
 
@@ -326,6 +339,10 @@ export async function refundPayload(paymentId: string, freelancerId: string) {
       hbd_amount: payment.currency === "HBD" ? amountStr : "0.000 HBD",
       hive_amount: payment.currency === "HIVE" ? amountStr : "0.000 HIVE",
     },
+    mode:
+      freelancerUser!.auth_type === "google" && freelancerUser!.kms_key_ref
+        ? ("custodial" as const)
+        : ("keychain" as const),
   };
 }
 
@@ -353,4 +370,42 @@ export async function confirmRefund(
     [payment.milestone_id],
   );
   return updated.rows[0]!;
+}
+
+/**
+ * Custodial Google users: server-side sign stub via KMS.
+ * Dry-run unless CUSTODIAL_LIVE=true. Returns a synthetic hive_tx_id in dry-run.
+ */
+export async function executeCustodialSign(
+  userId: string,
+  opName: string,
+  ops: Record<string, unknown>[],
+): Promise<{ dryRun: boolean; hive_tx_id: string; message: string }> {
+  const user = await getUserById(userId);
+  if (!user) throw new AppError(404, "User not found");
+  if (user.auth_type !== "google" || !user.kms_key_ref) {
+    throw new AppError(400, "User is not a custodial Google account");
+  }
+
+  const live = process.env.CUSTODIAL_LIVE === "true";
+  const kms = createKmsSigner();
+  try {
+    await kms.signWithKms(user.hive_username, user.kms_key_ref, ops);
+  } catch (err) {
+    // Local vault may only have presence flags — allow dry-run without env key material
+    if (live) throw err;
+    console.warn("[payments] custodial sign stub (no vault key material):", err);
+  }
+
+  const hive_tx_id = live
+    ? `pending-broadcast-${opName}`
+    : `dry-run-${opName}-${Date.now()}`;
+
+  return {
+    dryRun: !live,
+    hive_tx_id,
+    message: live
+      ? "Custodial broadcast path invoked (wire full WAX broadcast in escrow hardening)"
+      : "Dry-run custodial sign — set CUSTODIAL_LIVE=true for live path",
+  };
 }

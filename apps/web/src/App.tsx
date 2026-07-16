@@ -3,6 +3,7 @@ import { HomePage } from "./pages/HomePage";
 import { KeychainCheckPage } from "./pages/KeychainCheckPage";
 import { LoginPage } from "./pages/LoginPage";
 import { JobsPage } from "./pages/JobsPage";
+import { ClaimAccountPage } from "./pages/ClaimAccountPage";
 
 export function App() {
   return (
@@ -15,6 +16,7 @@ export function App() {
           <Link to="/">Home</Link>
           <Link to="/jobs">Jobs</Link>
           <Link to="/login">Login</Link>
+          <Link to="/claim">Claim</Link>
           <Link to="/keychain">Keychain</Link>
         </nav>
       </header>
@@ -23,6 +25,7 @@ export function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/jobs" element={<JobsPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/claim" element={<ClaimAccountPage />} />
           <Route path="/keychain" element={<KeychainCheckPage />} />
         </Routes>
       </main>

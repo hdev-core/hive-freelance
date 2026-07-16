@@ -42,7 +42,8 @@ npm run dev
 - Keychain smoke UI: http://localhost:5173/keychain  
 - Login / jobs smoke UI: http://localhost:5173/login · http://localhost:5173/jobs  
 
-API MVP details: [`Docs/[02] Additional Docs/[06] API_MVP_Guide.md`](Docs/[02]%20Additional%20Docs/[06]%20API_MVP_Guide.md).
+API MVP details: [`Docs/[02] Additional Docs/[06] API_MVP_Guide.md`](Docs/[02]%20Additional%20Docs/[06]%20API_MVP_Guide.md).  
+Auth (Keychain / Google / claim): [`Docs/[02] Additional Docs/[07] Auth_Guide.md`](Docs/[02]%20Additional%20Docs/[07]%20Auth_Guide.md).
 
 ## Scripts
 

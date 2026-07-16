@@ -1,19 +1,36 @@
-import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { apiFetch } from "../api";
 
 type AuthResponse = {
   ok: boolean;
-  user: { id: string; hiveUsername: string; role: string };
+  user: { id: string; username: string; role: string; authType?: string };
+  provisioned?: boolean;
   warning?: string;
 };
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("demo@example.com");
   const [role, setRole] = useState<"client" | "freelancer" | "both">("both");
   const [status, setStatus] = useState("Idle");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (params.get("google") === "1") {
+      setNotice(
+        params.get("provisioned") === "1"
+          ? "Google account provisioned (Hive identity created). You are signed in."
+          : "Signed in with Google.",
+      );
+      void apiFetch<{ user: { username: string } }>("/api/v1/auth/me")
+        .then(() => navigate("/jobs"))
+        .catch(() => undefined);
+    }
+  }, [params, navigate]);
 
   async function keychainLogin(e: FormEvent) {
     e.preventDefault();
@@ -79,13 +96,44 @@ export function LoginPage() {
     }
   }
 
+  async function devGoogle() {
+    setError(null);
+    try {
+      setStatus("Dev Google…");
+      const res = await apiFetch<AuthResponse>("/api/v1/auth/dev-google", {
+        method: "POST",
+        body: JSON.stringify({ email, role }),
+      });
+      setStatus(
+        res.provisioned
+          ? "Provisioned Google user (custodial Hive account)"
+          : "Returning Google user",
+      );
+      setNotice(
+        "Platform is custodying keys for this Google user until you claim the account.",
+      );
+      navigate("/jobs");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("Failed");
+    }
+  }
+
+  function continueGoogle() {
+    // Full page navigation so OAuth redirect works (and Vite proxies /api)
+    window.location.href = "/api/v1/auth/google";
+  }
+
   return (
     <section className="panel">
       <h1>Login</h1>
       <p className="lede">
-        Hive Keychain challenge/response, or use <strong>dev-login</strong>{" "}
-        locally without Keychain.
+        Hive Keychain for native users, or Google (provisions a custodial Hive
+        account). Use <strong>dev</strong> buttons locally without Keychain /
+        Google Console.
       </p>
+
+      {notice && <p className="notice">{notice}</p>}
 
       <form className="actions" onSubmit={(e) => void keychainLogin(e)}>
         <label>
@@ -115,12 +163,32 @@ export function LoginPage() {
         </button>
       </form>
 
+      <hr className="sep" />
+
+      <div className="actions">
+        <label>
+          Google email (dev)
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@gmail.com"
+          />
+        </label>
+        <button type="button" onClick={() => void devGoogle()}>
+          Dev Google
+        </button>
+        <button type="button" onClick={continueGoogle}>
+          Continue with Google
+        </button>
+      </div>
+
       <p>
         <strong>Status:</strong> {status}
       </p>
       {error && <p className="error">{error}</p>}
       <p>
-        <Link to="/jobs">Browse jobs</Link> without logging in (public).
+        <Link to="/jobs">Browse jobs</Link> ·{" "}
+        <Link to="/claim">Claim account</Link>
       </p>
     </section>
   );

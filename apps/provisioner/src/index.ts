@@ -1,13 +1,17 @@
+import { createHash, randomBytes } from "node:crypto";
 import {
   createChain,
   createKmsSigner,
   creatorKeyRef,
+  putCustodialKeys,
+  userActiveKeyRef,
 } from "@hive-freelance/hive";
 
 export type ProvisionResult = {
   dryRun: boolean;
   hiveUsername: string;
   kmsKeyRef: string | null;
+  ownerKeyRef: string | null;
   message: string;
 };
 
@@ -15,15 +19,55 @@ function isLive(): boolean {
   return process.env.PROVISIONER_LIVE === "true";
 }
 
-/**
- * Creates a Hive account for a Google-provisioned user.
- * Dev default is dry-run logging. Live mode requires creator keys + PROVISIONER_LIVE=true.
- */
+/** Generate a Hive-legal username from email (3–16 chars, lowercase). */
+export function suggestHiveUsername(email: string): string {
+  const local = email.split("@")[0] ?? "user";
+  const cleaned = local.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const hash = createHash("sha256").update(email).digest("hex").slice(0, 6);
+  const base = (cleaned.slice(0, 8) || "user") + hash;
+  return `hf${base}`.slice(0, 16);
+}
+
+export async function isHiveUsernameAvailable(
+  username: string,
+): Promise<boolean> {
+  try {
+    const chain = await createChain();
+    // Use JSON-RPC via chain handle's getBlock path pattern — query accounts
+    const apiNode = process.env.HIVE_API_NODE ?? "https://api.hive.blog";
+    await chain.close();
+    const res = await fetch(apiNode, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "condenser_api.get_accounts",
+        params: [[username]],
+      }),
+    });
+    const body = (await res.json()) as { result?: unknown[] };
+    return !body.result?.[0];
+  } catch {
+    // If RPC fails in dry-run, still allow synthetic names
+    return true;
+  }
+}
+
+export async function allocateHiveUsername(email: string): Promise<string> {
+  let candidate = suggestHiveUsername(email);
+  for (let i = 0; i < 5; i++) {
+    if (await isHiveUsernameAvailable(candidate)) return candidate;
+    candidate = `hf${randomBytes(4).toString("hex")}`.slice(0, 16);
+  }
+  return `hf${randomBytes(6).toString("hex")}`.slice(0, 16);
+}
+
 export async function createHiveAccount(
   hiveUsername: string,
 ): Promise<ProvisionResult> {
   const live = isLive();
-  const kms = createKmsSigner();
+  const { activeRef, ownerRef } = putCustodialKeys(hiveUsername, {});
 
   if (!live) {
     console.info(
@@ -32,8 +76,9 @@ export async function createHiveAccount(
     return {
       dryRun: true,
       hiveUsername,
-      kmsKeyRef: `local:user:${hiveUsername}`,
-      message: "Dry-run: account_create not broadcast",
+      kmsKeyRef: activeRef,
+      ownerKeyRef: ownerRef,
+      message: "Dry-run: account_create not broadcast; custodial refs stored in local vault",
     };
   }
 
@@ -42,14 +87,13 @@ export async function createHiveAccount(
     throw new Error("PROVISIONER_CREATOR_ACCOUNT required when PROVISIONER_LIVE=true");
   }
 
+  const kms = createKmsSigner();
   const keyRef = creatorKeyRef(creator);
   const has = await kms.hasKey(keyRef);
   if (!has) {
     throw new Error(`Creator key missing for ${keyRef}`);
   }
 
-  // Live path: build account_create via WAX + KMS in a later milestone.
-  // For scaffold, validate chain connectivity and refuse silent success.
   const chain = await createChain();
   await chain.getDynamicGlobalProperties();
   await chain.close();
@@ -61,13 +105,13 @@ export async function createHiveAccount(
   return {
     dryRun: true,
     hiveUsername,
-    kmsKeyRef: `local:user:${hiveUsername}`,
+    kmsKeyRef: activeRef,
+    ownerKeyRef: ownerRef,
     message:
-      "Live mode connected to chain + KMS stub; full account_create broadcast lands with escrow/auth work",
+      "Live mode connected to chain + KMS stub; full account_create broadcast TBD",
   };
 }
 
-/** Delegates RC (via vesting shares) so a new zero-RC account can transact. */
 export async function delegateRc(hiveUsername: string): Promise<ProvisionResult> {
   const live = isLive();
 
@@ -79,6 +123,7 @@ export async function delegateRc(hiveUsername: string): Promise<ProvisionResult>
       dryRun: true,
       hiveUsername,
       kmsKeyRef: null,
+      ownerKeyRef: null,
       message: "Dry-run: RC delegation not broadcast",
     };
   }
@@ -98,17 +143,16 @@ export async function delegateRc(hiveUsername: string): Promise<ProvisionResult>
     dryRun: true,
     hiveUsername,
     kmsKeyRef: null,
+    ownerKeyRef: null,
     message: "Live mode KMS stub invoked for RC delegation (broadcast TBD)",
   };
 }
 
-/** Stores custodial active-key reference for Google users (never logs key material). */
 export async function storeCustodialKey(
   userId: number | string,
   keyRef: string,
 ): Promise<{ userId: string; keyRef: string }> {
   const kms = createKmsSigner();
-  // In production this creates a per-user KMS key. Local stub only records the ref.
   console.info(
     `[provisioner] storeCustodialKey user=${userId} ref=${keyRef} mode=${kms.mode}`,
   );
@@ -116,18 +160,19 @@ export async function storeCustodialKey(
 }
 
 export async function provisionGoogleUser(opts: {
-  hiveUsername: string;
-  userId: number | string;
+  email: string;
+  hiveUsername?: string;
 }): Promise<{
+  hiveUsername: string;
   account: ProvisionResult;
   rc: ProvisionResult;
-  custodial: { userId: string; keyRef: string };
+  kmsKeyRef: string;
 }> {
-  const account = await createHiveAccount(opts.hiveUsername);
-  const rc = await delegateRc(opts.hiveUsername);
-  const custodial = await storeCustodialKey(
-    opts.userId,
-    account.kmsKeyRef ?? `local:user:${opts.hiveUsername}`,
-  );
-  return { account, rc, custodial };
+  const hiveUsername =
+    opts.hiveUsername ?? (await allocateHiveUsername(opts.email));
+  const account = await createHiveAccount(hiveUsername);
+  const rc = await delegateRc(hiveUsername);
+  const kmsKeyRef = account.kmsKeyRef ?? userActiveKeyRef(hiveUsername);
+  await storeCustodialKey("pending", kmsKeyRef);
+  return { hiveUsername, account, rc, kmsKeyRef };
 }

@@ -5,9 +5,12 @@ export const JWT_COOKIE = "hf_token";
 
 export type JwtPayload = {
   sub: string;
-  hiveUsername: string;
+  /** Hive username — matches Auth_Roles_Strategy.md */
+  username: string;
   role: UserRole;
 };
+
+type LegacyJwt = JwtPayload & { hiveUsername?: string };
 
 function secret(): string {
   const s = process.env.JWT_SECRET;
@@ -20,7 +23,12 @@ export function signToken(payload: JwtPayload): string {
 }
 
 export function verifyToken(token: string): JwtPayload {
-  return jwt.verify(token, secret()) as JwtPayload;
+  const raw = jwt.verify(token, secret()) as LegacyJwt;
+  return {
+    sub: raw.sub,
+    username: raw.username ?? raw.hiveUsername ?? "",
+    role: raw.role,
+  };
 }
 
 export function cookieOptions() {
@@ -28,7 +36,8 @@ export function cookieOptions() {
   return {
     httpOnly: true,
     secure: isProd,
-    sameSite: "lax" as const,
+    // Strict matches Auth doc; same-origin Vite proxy keeps cookies working locally.
+    sameSite: "strict" as const,
     maxAge: 24 * 60 * 60 * 1000,
     path: "/",
   };
