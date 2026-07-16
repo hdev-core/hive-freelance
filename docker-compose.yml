@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hive-freelance-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+      POSTGRES_DB: hive_freelance
+    volumes:
+      - hive_freelance_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hive -d hive_freelance"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  hive_freelance_pg:

@@ -1,0 +1,34 @@
+# Render blueprint — internship/demo hosting (free tier friendly).
+# Agent/provisioner secrets must use Render env groups / secret store, never committed keys.
+services:
+  - type: web
+    name: hive-freelance-api
+    runtime: node
+    rootDir: .
+    buildCommand: npm install && npm run build -w @hive-freelance/shared && npm run build -w @hive-freelance/db && npm run build -w @hive-freelance/hive && npm run build -w @hive-freelance/provisioner && npm run build -w @hive-freelance/api
+    startCommand: npm run start -w @hive-freelance/api
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hive-freelance-db
+          property: connectionString
+
+  - type: web
+    name: hive-freelance-web
+    runtime: static
+    rootDir: apps/web
+    buildCommand: npm install && npm run build -w @hive-freelance/web
+    staticPublishPath: apps/web/dist
+
+  - type: worker
+    name: hive-freelance-listener
+    runtime: node
+    rootDir: .
+    buildCommand: npm install && npm run build -w @hive-freelance/shared && npm run build -w @hive-freelance/db && npm run build -w @hive-freelance/hive && npm run build -w @hive-freelance/listener
+    startCommand: npm run start -w @hive-freelance/listener
+
+databases:
+  - name: hive-freelance-db
+    plan: free

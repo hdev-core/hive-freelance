@@ -1,0 +1,27 @@
+{
+  "name": "@hive-freelance/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "migrate": "tsx src/migrate.ts",
+    "dev": "tsc -p tsconfig.json --watch"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "pg": "^8.14.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.11",
+    "tsx": "^4.19.3"
+  }
+}

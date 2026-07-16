@@ -1,0 +1,28 @@
+{
+  "name": "hive-freelance",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hive-based freelance marketplace with on-chain escrow",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:packages": "npm run build -w @hive-freelance/shared && npm run build -w @hive-freelance/db && npm run build -w @hive-freelance/hive && npm run build -w @hive-freelance/provisioner",
+    "predev": "npm run build:packages",
+    "dev": "concurrently -n api,web,listener -c blue,green,magenta \"npm run dev -w @hive-freelance/api\" \"npm run dev -w @hive-freelance/web\" \"npm run dev -w @hive-freelance/listener\"",
+    "dev:api": "npm run build:packages && npm run dev -w @hive-freelance/api",
+    "dev:web": "npm run dev -w @hive-freelance/web",
+    "dev:listener": "npm run build:packages && npm run dev -w @hive-freelance/listener",
+    "build": "npm run build:packages && npm run build -w @hive-freelance/api && npm run build -w @hive-freelance/listener && npm run build -w @hive-freelance/web",
+    "db:migrate": "npm run migrate -w @hive-freelance/db",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
