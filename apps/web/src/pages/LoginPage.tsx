@@ -1,6 +1,16 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { KeyRound, ShieldCheck } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { apiFetch } from "../api";
+import { Card } from "../components/ui/Card";
+import { Button } from "../components/ui/Button";
+import { Input } from "../components/ui/Input";
+import { Select } from "../components/ui/Select";
+import { ThemeToggle } from "../components/ui/ThemeToggle";
+import { Logo } from "../components/ui/Logo";
+import { GoogleIcon } from "../components/ui/GoogleIcon";
+
+type Role = "client" | "freelancer";
 
 type AuthResponse = {
   ok: boolean;
@@ -10,12 +20,19 @@ type AuthResponse = {
   rc_warning?: string | null;
 };
 
+type Me = {
+  user: { username: string; role: string };
+};
+
+function dashboardPathForRole(role: string): string {
+  return role === "freelancer" ? "/freelancer/overview" : "/client/overview";
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("demo@example.com");
-  const [role, setRole] = useState<"client" | "freelancer" | "both">("both");
+  const [role, setRole] = useState<Role>("client");
   const [status, setStatus] = useState("Idle");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -27,8 +44,8 @@ export function LoginPage() {
           ? "Google account provisioned (Hive identity created). You are signed in."
           : "Signed in with Google.",
       );
-      void apiFetch<{ user: { username: string } }>("/api/v1/auth/me")
-        .then(() => navigate("/jobs"))
+      void apiFetch<Me>("/api/v1/auth/me")
+        .then((r) => navigate(dashboardPathForRole(r.user.role)))
         .catch(() => undefined);
     }
   }, [params, navigate]);
@@ -75,7 +92,7 @@ export function LoginPage() {
         setNotice(verified.rc_warning);
       }
       setStatus("Logged in");
-      navigate("/jobs");
+      navigate(dashboardPathForRole(role));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("Failed");
@@ -94,30 +111,7 @@ export function LoginPage() {
         }),
       });
       setStatus("Logged in (dev)");
-      navigate("/jobs");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setStatus("Failed");
-    }
-  }
-
-  async function devGoogle() {
-    setError(null);
-    try {
-      setStatus("Dev Google…");
-      const res = await apiFetch<AuthResponse>("/api/v1/auth/dev-google", {
-        method: "POST",
-        body: JSON.stringify({ email, role }),
-      });
-      setStatus(
-        res.provisioned
-          ? "Provisioned Google user (custodial Hive account)"
-          : "Returning Google user",
-      );
-      setNotice(
-        "Platform is custodying keys for this Google user until you claim the account.",
-      );
-      navigate("/jobs");
+      navigate(dashboardPathForRole(role));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("Failed");
@@ -130,71 +124,114 @@ export function LoginPage() {
   }
 
   return (
-    <section className="panel">
-      <h1>Login</h1>
-      <p className="lede">
-        Hive Keychain for native users, or Google (provisions a custodial Hive
-        account). Use <strong>dev</strong> buttons locally without Keychain /
-        Google Console.
-      </p>
-
-      {notice && <p className="notice">{notice}</p>}
-
-      <form className="actions" onSubmit={(e) => void keychainLogin(e)}>
-        <label>
-          Hive username
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="alice"
-          />
-        </label>
-        <label>
-          Role
-          <select
-            value={role}
-            onChange={(e) =>
-              setRole(e.target.value as "client" | "freelancer" | "both")
-            }
-          >
-            <option value="both">both</option>
-            <option value="client">client</option>
-            <option value="freelancer">freelancer</option>
-          </select>
-        </label>
-        <button type="submit">Login with Keychain</button>
-        <button type="button" onClick={() => void devLogin()}>
-          Dev login
-        </button>
-      </form>
-
-      <hr className="sep" />
-
-      <div className="actions">
-        <label>
-          Google email (dev)
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@gmail.com"
-          />
-        </label>
-        <button type="button" onClick={() => void devGoogle()}>
-          Dev Google
-        </button>
-        <button type="button" onClick={continueGoogle}>
-          Continue with Google
-        </button>
+    <div className="relative flex min-h-screen items-center justify-center bg-canvas px-4 py-12">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
       </div>
 
-      <p>
-        <strong>Status:</strong> {status}
-      </p>
-      {error && <p className="error">{error}</p>}
-      <p>
-        <Link to="/jobs">Browse jobs</Link> ·{" "}
-        <Link to="/claim">Claim account</Link>
-      </p>
-    </section>
+      <div className="w-full max-w-md">
+        <div className="mb-6 flex justify-center">
+          <Logo size="lg" />
+        </div>
+
+        <Card className="flex flex-col gap-5">
+          <div>
+            <h1 className="text-xl font-bold text-text-primary sm:text-2xl">Sign in</h1>
+            <p className="lede mt-1">
+              Choose how you&apos;d like to continue. Hive is always the identity
+              behind your account.
+            </p>
+          </div>
+
+          {notice && <p className="notice">{notice}</p>}
+
+          <form className="flex flex-col gap-3" onSubmit={(e) => void keychainLogin(e)}>
+            <Input
+              label="Hive username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="alice"
+            />
+            <div className="flex gap-2">
+              <Button type="button" variant="secondary" onClick={() => void devLogin()}>
+                Dev sign in
+              </Button>
+              <Select
+                aria-label="Role"
+                className="flex-1"
+                value={role}
+                onChange={(e) => setRole(e.target.value as Role)}
+              >
+                <option value="client">Client</option>
+                <option value="freelancer">Freelancer</option>
+              </Select>
+            </div>
+            <Button type="submit" variant="inverse" className="w-full">
+              <KeyRound size={18} />
+              Sign in with Hive Keychain
+            </Button>
+          </form>
+
+          <div className="flex items-center gap-3">
+            <hr className="flex-1 border-border" />
+            <span className="text-xs font-medium text-text-muted">OR</span>
+            <hr className="flex-1 border-border" />
+          </div>
+
+          <Button type="button" variant="outline" className="w-full" onClick={continueGoogle}>
+            <GoogleIcon size={18} />
+            Continue with Google
+          </Button>
+
+          <div className="flex gap-3 rounded-lg border border-border bg-surface-muted p-3">
+            <ShieldCheck size={18} className="mt-0.5 shrink-0 text-text-secondary" />
+            <p className="text-sm text-text-secondary">
+              <strong className="text-text-primary">New to Hive?</strong> Continue
+              with Google and we&apos;ll automatically create a Hive account for
+              you, linked to your Google identity — no wallet setup required. You
+              can connect Hive Keychain anytime later.
+            </p>
+          </div>
+
+          <p className="text-sm text-text-secondary">
+            <strong className="text-text-primary">Status:</strong> {status}
+          </p>
+          {error && <p className="error">{error}</p>}
+
+          <div className="flex flex-col items-center gap-2 border-t border-border pt-4 text-center text-sm text-text-secondary">
+            <p>
+              Don&apos;t have Keychain?{" "}
+              <a
+                href="#"
+                onClick={(event) => event.preventDefault()}
+                className="font-medium text-text-primary hover:shadow-elevate"
+              >
+                Get the extension
+              </a>
+            </p>
+            <p className="text-xs text-text-muted">
+              By continuing you agree to HiveWork&apos;s{" "}
+              <a href="#" onClick={(event) => event.preventDefault()} className="hover:text-text-primary">
+                Terms
+              </a>{" "}
+              and{" "}
+              <a href="#" onClick={(event) => event.preventDefault()} className="hover:text-text-primary">
+                Privacy Policy
+              </a>
+              .
+            </p>
+            <p>
+              <Link to="/jobs" className="font-medium text-text-primary hover:shadow-elevate">
+                Browse jobs
+              </Link>{" "}
+              ·{" "}
+              <Link to="/claim" className="font-medium text-text-primary hover:shadow-elevate">
+                Claim account
+              </Link>
+            </p>
+          </div>
+        </Card>
+      </div>
+    </div>
   );
 }

@@ -54,35 +54,43 @@ The design prioritizes usability, data clarity, and security indicators over dec
 
 # 4. Color System
 
-The platform uses a unified theme mapping system, ensuring every light mode color token has a corresponding high-contrast, low-glare equivalent in dark mode.
+The platform uses a **two-tier color system** with a unified theme mapping, ensuring every light mode color token has a corresponding high-contrast, low-glare equivalent in dark mode.
 
-## Core Brand Palette
+- **Tier 1 — Chrome palette:** black, greys, and a single red accent only. This covers every structural UI element — backgrounds, surfaces, borders, text, navigation, buttons, cards, tags, avatars. No other hue is used here, including blue. Red is used only as a background/fill for pill or circle shapes (buttons, active-nav pills, badges, tags); it is never used as text color — regular text always stays neutral (black/grey/white depending on theme).
+- **Tier 2 — Semantic status palette:** a small, separate palette used *only* for status/state indicators (badges, pills, trend icons) such as pending, success, and network-health dots. It must never be used for chrome (layout, navigation, buttons, borders).
+
+## Core Chrome Palette
 
 | Element / Usage | Light Mode Hex | Dark Mode Hex | Purpose |
 |:---|:---|:---|:---|
-| **Primary Brand Accent** | `#1A56FF` | `#1A56FF` | General CTAs, primary action buttons, and non-blockchain navigation states |
-| **Hive Accent / Blockchain** | `#E31337` | `#E31337` | Escrow states, blockchain indicators, Hive Keychain actions, transaction highlights, and on-chain badges |
-| **Canvas Background** | `#F8FAFC` | `#0B0F19` | Global application layout background canvas |
-| **Surface / Container** | `#FFFFFF` | `#161D30` | Cards, dashboard widgets, sidebars, panels, form inputs |
-| **Primary Text** | `#0F172A` | `#F8FAFC` | Headers, page titles, primary labels, main copy |
-| **Secondary Text** | `#64748B` | `#94A3B8` | Subtitles, desaturated metadata, timestamps, hashes |
-| **Borders / Separators** | `#E2E8F0` | `#24324F` | Card boundaries, input outlines, table row dividers |
+| **Accent (Red)** | `#E31337` | `#FF3D5A` | Primary CTAs, escrow/on-chain states, active-nav indicators, Hive Keychain actions — always as a fill, never as text color |
+| **Accent Hover / Pressed** | `#C10E2C` / `#A50C26` | `#FF5C76` / `#D62842` | Hover and active states for the accent fill |
+| **Accent Subtle** | `#FEE2E2` | `#3A1016` | Tinted red backgrounds for tags, avatars, and active-nav pills (paired with neutral text) |
+| **Accent Subtle Border** | `#FECACA` | `#5C1822` | Border for tinted-red tags/chips/badges paired with Accent Subtle |
+| **Canvas Background** | `#F8FAFC` | `#0A0D12` | Global application layout background canvas |
+| **Surface / Container** | `#FFFFFF` | `#14171C` | Cards, dashboard widgets, sidebars, panels, form inputs |
+| **Surface Muted** | `#F1F5F9` | `#1B1F26` | Secondary surfaces, hover backgrounds, code/detail blocks |
+| **Primary Text** | `#0F172A` | `#F5F5F7` | Headers, page titles, primary labels, main copy |
+| **Secondary Text** | `#64748B` | `#9AA1AC` | Subtitles, desaturated metadata, timestamps, hashes, nav links |
+| **Muted Text** | `#94A3B8` | `#6E7682` | Placeholder text, disabled labels, least-emphasis captions |
+| **Borders / Separators** | `#E2E8F0` | `#282D35` | Card boundaries, input outlines, table row dividers |
+| **Borders Strong** | `#CBD5E1` | `#3A404A` | Hover/emphasis border state, e.g. on card or nav hover |
 
-Use the Hive crimson token sparingly. Keep the broader interface neutral with light surfaces, gray scales, and dark text; reserve red for on-chain and escrow interactions only.
+Red is the only non-neutral chrome hue. There is no separate blue "primary brand accent" — every CTA, including non-blockchain actions, uses the red accent.
 
 ---
 
 ## Semantic Status Palette
 
-Status badges and system alerts use background fills paired with high-contrast text strings.
+Status badges and system alerts use background fills paired with high-contrast text strings. This is the one place outside the chrome palette where color is used, and it is scoped strictly to status/state indicators.
 
 | State Indicator | Light Mode (BG / Text) | Dark Mode (BG / Text) | Platform Use Case |
 |:---|:---|:---|:---|
-| **Success / Growth** | `#ECFDF5` / `#047857` | `#062F21` / `#10B981` | Completed contracts, payments, and standard success states |
+| **Success / Growth** | `#ECFDF5` / `#047857` | `#062F21` / `#10B981` | Completed contracts, payments, positive wallet/earnings indicators |
 | **Warning / Pending** | `#FEF3C7` / `#92400E` | `#2D1F06` / `#F59E0B` | Deadlines, milestones pending review, "Awaiting Funding" |
-| **Error / Alert** | `#FEE2E2` / `#991B1B` | `#3A1010` / `#EF4444` | Failed transactions, validation errors, admin issues |
-| **Hive / On-Chain Accent** | `#FEE2E2` / `#E31337` | `#3A1010` / `#E31337` | Escrow funded badges, transaction highlights, Hive Keychain buttons, and blockchain verification indicators |
-| **Information** | `#EFF6FF` / `#1D4ED8` | `#091E42` / `#3B82F6` | System notifications, network logs, metadata info |
+| **Error / On-Chain Accent** | Solid Accent fill / white text | Solid Accent fill / white text | Escrow funded badges, confirmed/released transactions, failed transactions, validation errors — reuses the chrome accent as a solid fill with neutral (white) text, never colored text |
+
+There is no blue "Information" status; use a neutral grey badge (Surface Muted background, Secondary Text) for informational states instead.
 
 ---
 
@@ -109,11 +117,13 @@ Typography should provide:
 | Element / Token | Font Weight | Line Height | Case Style | Typical Usage Context |
 |--------|------|-------------|------------|-----------------------|
 | Heading 1 | Bold (700) | 1.25 | Sentence | Main dashboard greetings (e.g., "Welcome back, Maya") |
-| Heading 2 | SemiBold (600) | 1.30 | Sentence | Major sections and component categories |
-| Heading 3 | SemiBold (600) | 1.35 | Sentence | Job titles, modal headers, and sub-sections |
-| Body Text | Regular (400) | 1.50 | Sentence | Descriptions, long messages, and proposal cover letters |
+| Heading 2 | SemiBold (600) | 1.375 | Sentence | Major sections and component categories |
+| Heading 3 | SemiBold (600) | 1.375 | Sentence | Job titles, modal headers, and sub-sections |
+| Body Text | Regular (400) | 1.625 | Sentence | Descriptions, long messages, and proposal cover letters |
 | Numeric Text | Bold (700) | 1.10 | Normal | Primary asset amounts and pricing (e.g., "42,150 HIVE") |
 | Caption Text | Medium (500) | 1.40 | Normal | Timestamps, labels, block numbers, and hashes |
+
+Heading 1 through Body Text map directly to the base `h1`/`h2`/`h3`/`p` styles in the shared stylesheet (Tailwind's `leading-tight`/`leading-snug`/`leading-snug`/`leading-relaxed`). Numeric Text and Caption Text are not yet implemented as their own utility classes — apply the weight/line-height above manually until a dedicated token exists.
 
 ---
 
@@ -125,7 +135,7 @@ The interface uses consistent spacing patterns to maintain layout clarity.
 
 Common spacing rules:
 - **Global Layout Canvas:** Standard 1440px viewport container width with variable responsive scaling.
-- **Dashboard Layout:** Standard two-column configuration featuring a fixed left navigation sidebar (240px wide) paired with a fluid main stage canvas.
+- **Dashboard Layout:** Standard two-column configuration featuring a left navigation sidebar (256px wide, collapsible to an 80px icon-only rail via a toggle in the sidebar header) paired with a fluid main stage canvas.
 - **Content Card Padding:** Structural components and summary cards use explicit 24px padding.
 - **Data Table Padding:** Tabular listings use a compressed 16px row padding to maximize scanning efficiency.
 
@@ -155,21 +165,22 @@ Layouts adapt seamlessly by:
 Used across public-facing visitor routes and marketing landing pathways.
 
 Contains:
-- Platform logo 
-- Public navigation links 
-- Authentication state actions (`Sign In` link / `Connect Hive Account` action button)
+- Platform logo (icon mark in a tinted-red circle badge + wordmark; the icon mark image swaps automatically between a light-mode and dark-mode asset with the active theme)
+- Public navigation links
+- Theme toggle control (light/dark)
+- Authentication state actions (`Sign In` link / `Connect Hive Wallet` action button)
 
 ---
 
 ### Sidebar Navigation
 
-Used for authenticated dashboards. It dynamically displays routes according to the user's active role.
+Used for authenticated dashboards. It dynamically displays routes according to the user's active role. The whole rail is collapsible to an icon-only state via a toggle next to the brand header, and the collapsed/expanded state persists across sessions.
 
 Contains:
-- **Platform Brand Header:** Logo container linked to the default landing path.
-- **Client/Freelancer Menu Stack:** Icon-accompanied vertical links (`Overview`, `Jobs`, `Proposals`, `Messages`, `Escrow & Funds`).
-- **Admin Specific Stack:** Links for `Platform Metrics`, `Dispute Center`, `User Management`, and `System Logs`.
-- **User Anchor Block:** Fixed base element displaying active avatar, profile display name, and unique Hive account handle identifier (`@maya.hive`).
+- **Platform Brand Header:** Logo container linked to the default landing path, with the collapse/expand toggle beside it (toggle only; wordmark hides when collapsed). A horizontal divider separates this header from the menu stack below.
+- **Client/Freelancer Menu Stack:** Icon-accompanied vertical links (`Overview`, `Jobs`, `Proposals`, `Messages`, `Escrow & Wallet`).
+- **Admin Specific Stack:** Links for `Platform Metrics`, `Dispute Center`, `User Management`, and `System Logs`. Phase 2 — not part of the MVP sidebar (see Section 12).
+- **User Anchor Block:** Fixed base element displaying active avatar, profile display name, and unique Hive account handle identifier (`@maya.hive`). Clicking it opens a popover menu with `Settings`, `Profile`, a divider, and `Log out`. There is no separate standalone `Settings` link in the menu stack — it lives only in this popover.
 
 ---
 
@@ -185,7 +196,7 @@ Examples:
 - Approve & Release
 - Deposit / Connect Hive Account
 
-Style: Solid `#1A56FF` fill with crisp white text for standard primary actions. Hive-specific flows such as `Connect Hive Account`, on-chain escrow actions, and transaction calls use the `#E31337` Hive accent instead.
+Style: Solid `#E31337` accent fill with crisp white text for every primary action — standard and Hive-specific alike. There is no separate blue primary; the red accent is the single primary CTA color across the platform.
 
 ### Secondary Button
 
@@ -208,7 +219,19 @@ Examples:
 - Reject Proposal
 - Suspend Account (Admin)
 
-Style: Solid semantic red background fill or red outline variant with clear safety validation prompts.
+Style: Transparent/surface background with a red accent border and neutral (never red) text, so it reads as distinct from the solid-fill Primary button while still keeping red scoped to a fill/border role, not text.
+
+### Inverse Button
+
+Purpose: Used for the single highest-emphasis identity action on a page, distinct from the platform's red primary action — currently only `Sign in with Hive Keychain`.
+
+Style: Solid fill using the Primary Text color, with Canvas-color text. Because both tokens flip with the theme, this button automatically inverts — near-black fill in light mode, near-white fill in dark mode — with no separate dark-mode override needed.
+
+### Outline Button
+
+Purpose: Used for third-party auth actions where the provider's own branding (e.g. the Google "G" mark) needs to sit on a neutral, unbranded surface rather than the red primary fill — currently only `Continue with Google`.
+
+Style: Surface-colored background with a visible Border, neutral text, and the provider's icon at the leading edge.
 
 ---
 
@@ -344,10 +367,10 @@ Examples:
 
 | Status Badge | Layout Style | System Use Case |
 |--------------|--------------|-----------------|
-| **Active / In Progress** | Blue background fill | Running contract being executed by a freelancer |
-| **Escrow Funded / Confirmed** | Hive crimson accent fill | Funds locked on-chain or payment successfully completed |
-| **Awaiting Funding / Pending** | Amber background fill | Processing transactions or waiting for client escrow lock |
-| **Suspended / Rejected** | Red background fill | Canceled paths, validation issues, or flagged accounts |
+| **Active / In Progress** | Neutral grey background fill | Running contract being executed by a freelancer |
+| **Escrow Funded / Confirmed** | Solid Hive crimson accent fill, white text | Funds locked on-chain or payment successfully completed |
+| **Awaiting Funding / Pending** | Amber background fill (semantic warning) | Processing transactions or waiting for client escrow lock |
+| **Suspended / Rejected** | Solid Hive crimson accent fill, white text | Canceled paths, validation issues, or flagged accounts |
 
 ---
 
