@@ -66,12 +66,15 @@ The platform uses a **two-tier color system** with a unified theme mapping, ensu
 | **Accent (Red)** | `#E31337` | `#FF3D5A` | Primary CTAs, escrow/on-chain states, active-nav indicators, Hive Keychain actions — always as a fill, never as text color |
 | **Accent Hover / Pressed** | `#C10E2C` / `#A50C26` | `#FF5C76` / `#D62842` | Hover and active states for the accent fill |
 | **Accent Subtle** | `#FEE2E2` | `#3A1016` | Tinted red backgrounds for tags, avatars, and active-nav pills (paired with neutral text) |
+| **Accent Subtle Border** | `#FECACA` | `#5C1822` | Border for tinted-red tags/chips/badges paired with Accent Subtle |
 | **Canvas Background** | `#F8FAFC` | `#0A0D12` | Global application layout background canvas |
 | **Surface / Container** | `#FFFFFF` | `#14171C` | Cards, dashboard widgets, sidebars, panels, form inputs |
 | **Surface Muted** | `#F1F5F9` | `#1B1F26` | Secondary surfaces, hover backgrounds, code/detail blocks |
 | **Primary Text** | `#0F172A` | `#F5F5F7` | Headers, page titles, primary labels, main copy |
 | **Secondary Text** | `#64748B` | `#9AA1AC` | Subtitles, desaturated metadata, timestamps, hashes, nav links |
-| **Borders / Separators** | `#E2E8F0` | `#28282D` | Card boundaries, input outlines, table row dividers |
+| **Muted Text** | `#94A3B8` | `#6E7682` | Placeholder text, disabled labels, least-emphasis captions |
+| **Borders / Separators** | `#E2E8F0` | `#282D35` | Card boundaries, input outlines, table row dividers |
+| **Borders Strong** | `#CBD5E1` | `#3A404A` | Hover/emphasis border state, e.g. on card or nav hover |
 
 Red is the only non-neutral chrome hue. There is no separate blue "primary brand accent" — every CTA, including non-blockchain actions, uses the red accent.
 
@@ -114,11 +117,13 @@ Typography should provide:
 | Element / Token | Font Weight | Line Height | Case Style | Typical Usage Context |
 |--------|------|-------------|------------|-----------------------|
 | Heading 1 | Bold (700) | 1.25 | Sentence | Main dashboard greetings (e.g., "Welcome back, Maya") |
-| Heading 2 | SemiBold (600) | 1.30 | Sentence | Major sections and component categories |
-| Heading 3 | SemiBold (600) | 1.35 | Sentence | Job titles, modal headers, and sub-sections |
-| Body Text | Regular (400) | 1.50 | Sentence | Descriptions, long messages, and proposal cover letters |
+| Heading 2 | SemiBold (600) | 1.375 | Sentence | Major sections and component categories |
+| Heading 3 | SemiBold (600) | 1.375 | Sentence | Job titles, modal headers, and sub-sections |
+| Body Text | Regular (400) | 1.625 | Sentence | Descriptions, long messages, and proposal cover letters |
 | Numeric Text | Bold (700) | 1.10 | Normal | Primary asset amounts and pricing (e.g., "42,150 HIVE") |
 | Caption Text | Medium (500) | 1.40 | Normal | Timestamps, labels, block numbers, and hashes |
+
+Heading 1 through Body Text map directly to the base `h1`/`h2`/`h3`/`p` styles in the shared stylesheet (Tailwind's `leading-tight`/`leading-snug`/`leading-snug`/`leading-relaxed`). Numeric Text and Caption Text are not yet implemented as their own utility classes — apply the weight/line-height above manually until a dedicated token exists.
 
 ---
 
@@ -130,7 +135,7 @@ The interface uses consistent spacing patterns to maintain layout clarity.
 
 Common spacing rules:
 - **Global Layout Canvas:** Standard 1440px viewport container width with variable responsive scaling.
-- **Dashboard Layout:** Standard two-column configuration featuring a fixed left navigation sidebar (240px wide) paired with a fluid main stage canvas.
+- **Dashboard Layout:** Standard two-column configuration featuring a left navigation sidebar (256px wide, collapsible to an 80px icon-only rail via a toggle in the sidebar header) paired with a fluid main stage canvas.
 - **Content Card Padding:** Structural components and summary cards use explicit 24px padding.
 - **Data Table Padding:** Tabular listings use a compressed 16px row padding to maximize scanning efficiency.
 
@@ -160,21 +165,22 @@ Layouts adapt seamlessly by:
 Used across public-facing visitor routes and marketing landing pathways.
 
 Contains:
-- Platform logo 
-- Public navigation links 
-- Authentication state actions (`Sign In` link / `Connect Hive Account` action button)
+- Platform logo (icon mark in a tinted-red circle badge + wordmark; the icon mark image swaps automatically between a light-mode and dark-mode asset with the active theme)
+- Public navigation links
+- Theme toggle control (light/dark)
+- Authentication state actions (`Sign In` link / `Connect Hive Wallet` action button)
 
 ---
 
 ### Sidebar Navigation
 
-Used for authenticated dashboards. It dynamically displays routes according to the user's active role.
+Used for authenticated dashboards. It dynamically displays routes according to the user's active role. The whole rail is collapsible to an icon-only state via a toggle next to the brand header, and the collapsed/expanded state persists across sessions.
 
 Contains:
-- **Platform Brand Header:** Logo container linked to the default landing path.
-- **Client/Freelancer Menu Stack:** Icon-accompanied vertical links (`Overview`, `Jobs`, `Proposals`, `Messages`, `Escrow & Funds`).
-- **Admin Specific Stack:** Links for `Platform Metrics`, `Dispute Center`, `User Management`, and `System Logs`.
-- **User Anchor Block:** Fixed base element displaying active avatar, profile display name, and unique Hive account handle identifier (`@maya.hive`).
+- **Platform Brand Header:** Logo container linked to the default landing path, with the collapse/expand toggle beside it (toggle only; wordmark hides when collapsed). A horizontal divider separates this header from the menu stack below.
+- **Client/Freelancer Menu Stack:** Icon-accompanied vertical links (`Overview`, `Jobs`, `Proposals`, `Messages`, `Escrow & Wallet`).
+- **Admin Specific Stack:** Links for `Platform Metrics`, `Dispute Center`, `User Management`, and `System Logs`. Phase 2 — not part of the MVP sidebar (see Section 12).
+- **User Anchor Block:** Fixed base element displaying active avatar, profile display name, and unique Hive account handle identifier (`@maya.hive`). Clicking it opens a popover menu with `Settings`, `Profile`, a divider, and `Log out`. There is no separate standalone `Settings` link in the menu stack — it lives only in this popover.
 
 ---
 
@@ -214,6 +220,18 @@ Examples:
 - Suspend Account (Admin)
 
 Style: Transparent/surface background with a red accent border and neutral (never red) text, so it reads as distinct from the solid-fill Primary button while still keeping red scoped to a fill/border role, not text.
+
+### Inverse Button
+
+Purpose: Used for the single highest-emphasis identity action on a page, distinct from the platform's red primary action — currently only `Sign in with Hive Keychain`.
+
+Style: Solid fill using the Primary Text color, with Canvas-color text. Because both tokens flip with the theme, this button automatically inverts — near-black fill in light mode, near-white fill in dark mode — with no separate dark-mode override needed.
+
+### Outline Button
+
+Purpose: Used for third-party auth actions where the provider's own branding (e.g. the Google "G" mark) needs to sit on a neutral, unbranded surface rather than the red primary fill — currently only `Continue with Google`.
+
+Style: Surface-colored background with a visible Border, neutral text, and the provider's icon at the leading edge.
 
 ---
 
