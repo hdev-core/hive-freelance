@@ -231,30 +231,58 @@ authRouter.put(
 
 // --- Google OAuth ---
 
+function webOrigin(): string {
+  return process.env.WEB_ORIGIN ?? "http://localhost:5173";
+}
+
+/**
+ * Google OAuth failures must never throw a raw JSON error here — the
+ * browser is mid full-page-navigation on the API's own origin at this
+ * point, not talking to the SPA over fetch, so a thrown AppError would
+ * strand the user on a bare JSON response instead of back on /login.
+ * Every failure path redirects back to the web app with a `google_error`
+ * code the SPA can show a friendly message for instead.
+ */
 authRouter.get(
   "/google",
   asyncHandler(async (_req, res) => {
-    const url = getGoogleAuthUrl();
-    res.redirect(url);
+    try {
+      const url = getGoogleAuthUrl();
+      res.redirect(url);
+    } catch (err) {
+      console.error("[auth] Failed to start Google OAuth:", err);
+      res.redirect(`${webOrigin()}/login?google_error=not_configured`);
+    }
   }),
 );
 
 authRouter.get(
   "/google/callback",
   asyncHandler(async (req, res) => {
-    const code = String(req.query.code ?? "");
-    if (!code) throw new AppError(400, "Missing code");
-    const identity = await exchangeGoogleCode(code);
-    const { user, provisioned, rcWarning } = await loginOrProvisionGoogle(identity);
-    if (rcWarning) console.warn(`[auth] ${rcWarning}`);
-    const session = issueSession(res, user);
-    const webOrigin = process.env.WEB_ORIGIN ?? "http://localhost:5173";
-    // Redirect back to web with a simple query flag (cookie already set on API domain —
-    // when using Vite proxy, API and web share localhost so cookie works).
-    res.redirect(
-      `${webOrigin}/login?google=1&provisioned=${provisioned ? "1" : "0"}`,
-    );
-    void session;
+    const oauthError = req.query.error ? String(req.query.error) : null;
+    const code = req.query.code ? String(req.query.code) : "";
+
+    if (oauthError || !code) {
+      res.redirect(
+        `${webOrigin()}/login?google_error=${encodeURIComponent(oauthError ?? "missing_code")}`,
+      );
+      return;
+    }
+
+    try {
+      const identity = await exchangeGoogleCode(code);
+      const { user, provisioned, rcWarning } = await loginOrProvisionGoogle(identity);
+      if (rcWarning) console.warn(`[auth] ${rcWarning}`);
+      issueSession(res, user);
+      // Cookie already set on API domain — when using Vite proxy, API and
+      // web share localhost so cookie works.
+      res.redirect(
+        `${webOrigin()}/login?google=1&provisioned=${provisioned ? "1" : "0"}`,
+      );
+    } catch (err) {
+      console.error("[auth] Google callback failed:", err);
+      res.redirect(`${webOrigin()}/login?google_error=callback_failed`);
+    }
   }),
 );
 

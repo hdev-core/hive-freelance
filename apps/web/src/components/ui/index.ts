@@ -11,4 +11,5 @@ export { Avatar, type AvatarProps } from "./Avatar";
 export { Logo, type LogoSize } from "./Logo";
 export { GoogleIcon } from "./GoogleIcon";
 export { ThemeToggle } from "./ThemeToggle";
+export { ToastProvider, useToast } from "./ToastProvider";
 export { buttonVariants, type ButtonVariant, type ButtonSize } from "./button-variants";
