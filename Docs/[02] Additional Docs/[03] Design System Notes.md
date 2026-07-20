@@ -430,7 +430,7 @@ Visual markers that confirm verified accounts and on-chain security.
 
 Used to highlight:
 - Fully verified user identity checks
-- Successfully funded and locked smart contract escrows
+- Successfully funded and locked native Hive escrows
 - Validated block logs and system compliance markers
 
 Implementation handoff note: the badge and any milestone-state visuals should be wired to the shared schema fields for user/profile verification, contract status, milestone status, payment status, and on-chain confirmation so they stay aligned with Laure's escrow model.
@@ -447,7 +447,7 @@ Contains:
 - **Ecosystem Monitoring Cards:** Top-level metrics tracking total platform transactional volume, active escrow value, total registered user metrics, and current unresolved dispute flags.
 - **Dispute Resolution Workspace (Phase 2):** A specialized layout comparing user contracts, milestones, and chat logs side-by-side, equipped with admin controls to release funds or issue refunds.
 - **User Compliance Controls:** Administrative tools attached to profile files to adjust user permissions, flag bad actors, check identity statuses, or issue temporary account suspensions.
-- **System Activity Log Grid:** High-density transaction tables tracking global portal actions, security exceptions, smart contract adjustments, and administrative overrides.
+- **System Activity Log Grid:** High-density transaction tables tracking global portal actions, security exceptions, on-chain escrow adjustments, and administrative overrides.
 
 ---
 
