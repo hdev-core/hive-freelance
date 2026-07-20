@@ -17,11 +17,13 @@
     "dev": "tsc -p tsconfig.json --watch"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
     "dotenv": "^16.6.1",
     "pg": "^8.14.1"
   },
   "devDependencies": {
     "@types/pg": "^8.11.11",
+    "prisma": "^6.19.3",
     "tsx": "^4.19.3"
   }
 }

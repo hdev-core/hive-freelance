@@ -1,0 +1,293 @@
+// Prisma schema for hive-freelance.
+// Source of truth: Docs/[03] System_Architecture_Data_Model/[02] DB_Schema_and_ER_Diagram.md
+// Two tables/one column group (listener_state, agent_signing_events, payments.*_tx_id
+// + ratification_deadline/escrow_expiration) aren't in that doc — they were added by
+// Ali's team to support the escrow listener flow, ported over from the previous
+// raw-SQL migrations. See ./RECONCILIATION.md (in this package) for the full explanation.
+//
+// Note: Prisma's schema DSL can't express named CHECK constraints, partial indexes,
+// or GIN indexes directly. Those are added by hand-editing the generated migration
+// SQL (see prisma/migrations/*/migration.sql) — same pattern used for the Knex
+// version, just moved into Prisma's migration files instead of standalone SQL files.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           BigInt    @id @default(autoincrement())
+  hiveUsername String    @unique @map("hive_username")
+  email        String?   @unique
+  role         String
+  authType     String    @default("keychain") @map("auth_type")
+  kmsKeyRef    String?   @map("kms_key_ref")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @map("updated_at")
+
+  profile         Profile?
+  oauthAccount    OauthAccount?
+  jobsAsClient    Job[]         @relation("ClientJobs")
+  proposals       Proposal[]
+  contractsAsClient     Contract[] @relation("ClientContracts")
+  contractsAsFreelancer Contract[] @relation("FreelancerContracts")
+  disputesRaised  Dispute[]
+  reviewsWritten  Review[]      @relation("ReviewsWritten")
+  reviewsReceived Review[]      @relation("ReviewsReceived")
+
+  @@map("users")
+}
+
+model Profile {
+  id          BigInt   @id @default(autoincrement())
+  userId      BigInt   @unique @map("user_id")
+  bio         String?
+  avatarUrl   String?  @map("avatar_url")
+  location    String?
+  hourlyRate  Decimal? @map("hourly_rate") @db.Decimal(10, 2)
+  skills      String[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model OauthAccount {
+  id             BigInt   @id @default(autoincrement())
+  userId         BigInt   @unique @map("user_id")
+  provider       String
+  providerUserId String   @unique @map("provider_user_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("oauth_accounts")
+}
+
+model Job {
+  id              BigInt    @id @default(autoincrement())
+  clientId        BigInt    @map("client_id")
+  title           String
+  description     String
+  budget          Decimal   @db.Decimal(10, 2)
+  category        String?
+  skillsRequired  String[]  @map("skills_required")
+  status          String    @default("open")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @map("updated_at")
+
+  client    User       @relation("ClientJobs", fields: [clientId], references: [id], onDelete: Cascade)
+  proposals Proposal[]
+  contracts Contract[]
+
+  @@index([clientId])
+  @@index([status])
+  @@map("jobs")
+}
+
+model Proposal {
+  id           BigInt   @id @default(autoincrement())
+  jobId        BigInt   @map("job_id")
+  freelancerId BigInt   @map("freelancer_id")
+  coverLetter  String   @map("cover_letter")
+  bidAmount    Decimal  @map("bid_amount") @db.Decimal(10, 2)
+  status       String   @default("pending")
+  hiveTxId     String?  @map("hive_tx_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @map("updated_at")
+
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  freelancer User      @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
+  contract   Contract?
+
+  @@unique([jobId, freelancerId], map: "uq_proposals_job_freelancer")
+  @@index([jobId])
+  @@index([freelancerId])
+  @@index([status])
+  @@map("proposals")
+}
+
+model Contract {
+  id                    BigInt    @id @default(autoincrement())
+  jobId                 BigInt    @map("job_id")
+  proposalId            BigInt    @unique @map("proposal_id")
+  clientId              BigInt    @map("client_id")
+  freelancerId          BigInt    @map("freelancer_id")
+  totalAmount           Decimal   @map("total_amount") @db.Decimal(10, 2)
+  status                String    @default("active")
+  completedByClient     Boolean   @default(false) @map("completed_by_client")
+  completedByFreelancer Boolean   @default(false) @map("completed_by_freelancer")
+  hiveTxId              String?   @map("hive_tx_id")
+  startDate             DateTime? @map("start_date")
+  endDate               DateTime? @map("end_date")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @default(now()) @map("updated_at")
+
+  job        Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  proposal   Proposal    @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  client     User        @relation("ClientContracts", fields: [clientId], references: [id], onDelete: Cascade)
+  freelancer User        @relation("FreelancerContracts", fields: [freelancerId], references: [id], onDelete: Cascade)
+  milestones Milestone[]
+  payments   Payment[]
+  disputes   Dispute[]
+  reviews    Review[]
+
+  @@index([clientId])
+  @@index([freelancerId])
+  @@index([status])
+  @@map("contracts")
+}
+
+model Milestone {
+  id             BigInt    @id @default(autoincrement())
+  contractId     BigInt    @map("contract_id")
+  title          String
+  description    String?
+  amount         Decimal   @db.Decimal(10, 2)
+  milestoneOrder Int       @map("milestone_order")
+  status         String    @default("pending")
+  submittedAt    DateTime? @map("submitted_at")
+  approvedAt     DateTime? @map("approved_at")
+  hiveTxId       String?   @map("hive_tx_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @map("updated_at")
+
+  contract Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  payments Payment[]
+  disputes Dispute[]
+
+  @@index([contractId])
+  @@index([status])
+  @@map("milestones")
+}
+
+model Payment {
+  id           BigInt    @id @default(autoincrement())
+  contractId   BigInt    @map("contract_id")
+  milestoneId  BigInt    @map("milestone_id")
+  amount       Decimal   @db.Decimal(10, 2)
+  currency     String    @default("HBD")
+  status       String    @default("pending")
+  escrowId     Int?      @map("escrow_id")
+  hiveTxId     String?   @unique @map("hive_tx_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @map("updated_at")
+
+  // Escrow-hardening fields — not in the original schema doc, ported from
+  // the previous 003_escrow_hardening.sql. Actively used by
+  // apps/api/src/services/{payments,agentEscrow}.ts and apps/listener.
+  freelancerApproveTxId String?   @map("freelancer_approve_tx_id")
+  agentApproveTxId      String?   @map("agent_approve_tx_id")
+  releaseTxId           String?   @map("release_tx_id")
+  ratificationDeadline  DateTime? @map("ratification_deadline")
+  escrowExpiration      DateTime? @map("escrow_expiration")
+
+  contract           Contract            @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  milestone          Milestone           @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  agentSigningEvents AgentSigningEvent[]
+
+  @@index([contractId])
+  @@index([milestoneId])
+  @@index([status])
+  @@map("payments")
+}
+
+model Dispute {
+  id                   BigInt    @id @default(autoincrement())
+  contractId           BigInt    @map("contract_id")
+  milestoneId          BigInt    @map("milestone_id")
+  raisedBy             BigInt    @map("raised_by")
+  reason               String
+  status               String    @default("open")
+  resolutionDirection  String?   @map("resolution_direction")
+  resolvedBy           String?   @map("resolved_by")
+  resolutionNotes      String?   @map("resolution_notes")
+  escrowDisputeTxId    String?   @map("escrow_dispute_tx_id")
+  escrowReleaseTxId    String?   @map("escrow_release_tx_id")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  resolvedAt           DateTime? @map("resolved_at")
+
+  contract  Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  raisedByUser User   @relation(fields: [raisedBy], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+  @@index([milestoneId])
+  @@index([status])
+  @@map("disputes")
+}
+
+model Review {
+  id         BigInt   @id @default(autoincrement())
+  contractId BigInt   @map("contract_id")
+  reviewerId BigInt   @map("reviewer_id")
+  revieweeId BigInt   @map("reviewee_id")
+  rating     Int      @db.SmallInt
+  comment    String?
+  hiveTxId   String?  @map("hive_tx_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  reviewer User     @relation("ReviewsWritten", fields: [reviewerId], references: [id], onDelete: Cascade)
+  reviewee User     @relation("ReviewsReceived", fields: [revieweeId], references: [id], onDelete: Cascade)
+
+  @@unique([contractId, reviewerId], map: "uq_reviews_contract_reviewer")
+  @@index([contractId])
+  @@index([revieweeId])
+  @@map("reviews")
+}
+
+model HiveRecord {
+  id             BigInt    @id @default(autoincrement())
+  hiveTxId       String    @unique @map("hive_tx_id")
+  appId          String    @map("app_id")
+  operationType  String    @map("operation_type")
+  fromAccount    String?   @map("from_account")
+  toAccount      String?   @map("to_account")
+  escrowId       Int?      @map("escrow_id")
+  payload        Json?
+  blockNumber    BigInt?   @map("block_number")
+  blockTimestamp DateTime? @map("block_timestamp")
+  confirmed      Boolean   @default(false)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @map("updated_at")
+
+  @@index([operationType])
+  @@index([fromAccount])
+  @@map("hive_records")
+}
+
+// Not in the original schema doc — tracks the listener's block cursor.
+// Ported from the previous 001_bootstrap.sql; read/written by packages/db
+// (listener cursor) and apps/listener.
+model ListenerState {
+  id                  String   @id @default("default")
+  lastProcessedBlock  BigInt   @default(0) @map("last_processed_block")
+  updatedAt           DateTime @default(now()) @map("updated_at")
+
+  @@map("listener_state")
+}
+
+// Not in the original schema doc — ported from 003_escrow_hardening.sql.
+// Used by apps/api/src/services/agentEscrow.ts.
+model AgentSigningEvent {
+  id            BigInt   @id @default(autoincrement())
+  paymentId     BigInt?  @map("payment_id")
+  escrowId      Int?     @map("escrow_id")
+  operationType String   @map("operation_type")
+  dryRun        Boolean  @default(true) @map("dry_run")
+  details       Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  payment Payment? @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@map("agent_signing_events")
+}

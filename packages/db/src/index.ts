@@ -1,4 +1,5 @@
 import { getPool } from "./pool.js";
+import { PrismaClient } from "@prisma/client";
 
 export { closePool, getPool, pingDb } from "./pool.js";
 export type { Pool, PoolClient } from "./pool.js";
@@ -104,4 +105,23 @@ export async function setListenerCursor(block: number): Promise<void> {
     `,
     [block],
   );
+}
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __prisma: PrismaClient | undefined;
+}
+
+export const prisma: PrismaClient = global.__prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+  global.__prisma = prisma;
+}
+
+export async function assertDbConnection(): Promise<void> {
+  await prisma.$queryRaw`SELECT 1`;
+}
+
+export async function closePrisma(): Promise<void> {
+  await prisma.$disconnect();
 }
