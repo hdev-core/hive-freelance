@@ -26,25 +26,27 @@ npm run dev
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/auth/challenge?username=` | — | 60s single-use challenge |
+| GET | `/auth/challenge?username=` | — | 60s single-use challenge; `400 INVALID_USERNAME` for malformed usernames (before hitting the chain) |
 | POST | `/auth/verify` | — | `{ username, signature, challenge, role? }` → sets cookie |
-| POST | `/auth/dev-login` | — | **Non-production only** — upsert user, set cookie |
+| POST | `/auth/dev-keychain-login` | — | Dev-gated (`ENABLE_DEV_AUTH_ROUTES=true`) — signs with a seeded (real, throwaway mainnet) account key, real verify, sets cookie |
 | POST | `/auth/logout` | — | Clear cookie |
 | GET | `/auth/me` | 🔒 | Current JWT user |
-| GET | `/auth/google` | — | **501** stub |
-| POST | `/auth/me/claim-account` | 🔒 | **501** stub |
+| GET | `/auth/google` | — | Real Google OAuth (see Auth_Guide.md) |
+| POST | `/auth/me/claim-account` | 🔒 | See Auth_Guide.md |
 
-### Smoke test (dev-login)
+### Smoke test (dev-keychain-login)
+
+See [Auth_Guide.md](./%5B07%5D%20Auth_Guide.md) for one-time seeded dev signer account setup, then:
 
 ```bash
-curl -c cookies.txt -X POST http://localhost:4000/api/v1/auth/dev-login ^
+curl -c cookies.txt -X POST http://localhost:4000/api/v1/auth/dev-keychain-login ^
   -H "Content-Type: application/json" ^
-  -d "{\"username\":\"alice\",\"role\":\"both\"}"
+  -d "{\"role\":\"both\"}"
 
 curl -b cookies.txt http://localhost:4000/api/v1/auth/me
 ```
 
-Optional: set `AUTH_RELAXED=true` in `.env` to skip ECDSA verify on Keychain signatures in non-production (not for real demos).
+There is no more `AUTH_RELAXED` fake-signature bypass — dev logins now always go through real ECDSA verification against a seeded (real mainnet, throwaway) account.
 
 ---
 
@@ -86,9 +88,10 @@ Optional: set `AUTH_RELAXED=true` in `.env` to skip ECDSA verify on Keychain sig
 ### Off-chain loop (curl sketch)
 
 ```bash
-# alice = client, bob = freelancer (two shells / cookie jars)
-curl -c alice.txt -X POST .../auth/dev-login -d "{\"username\":\"alice\",\"role\":\"client\"}"
-curl -c bob.txt   -X POST .../auth/dev-login -d "{\"username\":\"bob\",\"role\":\"freelancer\"}"
+# dev-keychain-login always signs in as the single seeded account
+# (see Auth_Guide.md) — use Keychain /auth/verify with two real accounts,
+# or the web UI's role switcher, to simulate distinct client/freelancer users.
+curl -c alice.txt -X POST .../auth/dev-keychain-login -d "{\"role\":\"client\"}"
 
 curl -b alice.txt -X POST .../jobs -d "{\"title\":\"Logo\",\"description\":\"Need a logo\",\"budget\":50}"
 curl -b bob.txt   -X POST .../jobs/1/proposals -d "{\"cover_letter\":\"Hi\",\"bid_amount\":50}"
@@ -129,9 +132,10 @@ Agent live `escrow_approve` broadcast is **not** live yet (KMS stub only). Full 
 
 ## Stubbed (501)
 
-- Google OAuth + claim-account
 - Disputes raise/resolve
 - Reviews
+
+(Google OAuth and claim-account are implemented, not stubbed — see the Auth table above and Auth_Guide.md.)
 
 ---
 
@@ -139,7 +143,7 @@ Agent live `escrow_approve` broadcast is **not** live yet (KMS stub only). Full 
 
 | URL | Purpose |
 |-----|---------|
-| http://localhost:5173/login | Keychain login + dev-login |
+| http://localhost:5173/login | Keychain login + dev-keychain-login |
 | http://localhost:5173/jobs | Public job list + session check |
 | http://localhost:5173/keychain | Extension smoke test |
 
@@ -151,7 +155,8 @@ Agent live `escrow_approve` broadcast is **not** live yet (KMS stub only). Full 
 |----------|---------|
 | `JWT_SECRET` | Required for tokens |
 | `AGENT_ACCOUNT` | Named in escrow payloads |
-| `AUTH_RELAXED` | Dev-only signature bypass |
+| `ENABLE_DEV_AUTH_ROUTES` | Opt-in for dev-google / dev-keychain-login |
+| `DEV_SEED_HIVE_USERNAME` / `DEV_SEED_POSTING_KEY` | Seeded real (mainnet, throwaway) account for dev-keychain-login |
 | `VITE_API_BASE_URL` | Leave **empty** locally so the browser uses Vite’s `/api` proxy (same-origin cookies). |
 | `API_PROXY_TARGET` | Vite proxy target (default `http://127.0.0.1:4000`) |
 | `WEB_ORIGIN` | CORS origin (default `http://localhost:5173`) |

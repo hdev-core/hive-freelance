@@ -2,6 +2,10 @@ import { getPool, type UserRole, type UserRow } from "@hive-freelance/db";
 import { AppError } from "../lib/errors.js";
 import { assertNotSelfContract } from "../middleware/auth.js";
 
+function isUniqueViolation(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && (err as { code?: string }).code === "23505");
+}
+
 export async function upsertUser(opts: {
   hiveUsername: string;
   role?: UserRole;
@@ -22,15 +26,37 @@ export async function upsertUser(opts: {
     return existing.rows[0];
   }
 
-  const inserted = await pool.query<UserRow>(
-    `
-    INSERT INTO users (hive_username, email, role, auth_type, kms_key_ref)
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING *
-    `,
-    [username, opts.email ?? null, role, authType, opts.kmsKeyRef ?? null],
-  );
-  const user = inserted.rows[0]!;
+  let user: UserRow;
+  try {
+    const inserted = await pool.query<UserRow>(
+      `
+      INSERT INTO users (hive_username, email, role, auth_type, kms_key_ref)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+      `,
+      [username, opts.email ?? null, role, authType, opts.kmsKeyRef ?? null],
+    );
+    user = inserted.rows[0]!;
+  } catch (err) {
+    // Concurrent insert for the same username/email (e.g. two simultaneous
+    // Google first-logins) — fall back to whichever row won the race instead
+    // of surfacing a raw constraint error.
+    if (isUniqueViolation(err)) {
+      const byUsername = await pool.query<UserRow>(
+        `SELECT * FROM users WHERE hive_username = $1`,
+        [username],
+      );
+      if (byUsername.rows[0]) return byUsername.rows[0];
+      if (opts.email) {
+        const byEmail = await pool.query<UserRow>(
+          `SELECT * FROM users WHERE email = $1`,
+          [opts.email],
+        );
+        if (byEmail.rows[0]) return byEmail.rows[0];
+      }
+    }
+    throw err;
+  }
 
   await pool.query(
     `INSERT INTO profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,

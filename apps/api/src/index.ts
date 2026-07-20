@@ -21,7 +21,6 @@ import { stubsRouter } from "./routes/stubs.js";
 
 const rootDir = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
 loadEnv({ path: resolve(rootDir, ".env") });
-loadEnv({ path: resolve(rootDir, ".env.example") });
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);

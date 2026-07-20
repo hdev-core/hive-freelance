@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { OAuth2Client } from "google-auth-library";
-import type { UserRole, UserRow } from "@hive-freelance/db";
+import { getPool, type UserRole, type UserRow } from "@hive-freelance/db";
 import { provisionGoogleUser } from "@hive-freelance/provisioner";
 import { AppError } from "../lib/errors.js";
 import {
@@ -67,25 +68,63 @@ export async function exchangeGoogleCode(
 }
 
 /**
+ * Serializes concurrent first-logins for the same Google identity with a
+ * Postgres advisory lock, so two simultaneous callbacks (double-click,
+ * browser retry) can't both provision a brand-new Hive account for the
+ * same sub. The lock is scoped to a hash of `sub`, held for the duration
+ * of the transaction, and released automatically on commit/rollback.
+ */
+async function withGoogleSubLock<T>(
+  sub: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const client = await getPool().connect();
+  const lockKey = BigInt(
+    `0x${createHash("sha256").update(sub).digest("hex").slice(0, 15)}`,
+  ).toString();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [lockKey]);
+    const result = await fn();
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Lookup or provision a platform user for a Google identity.
  */
 export async function loginOrProvisionGoogle(
   identity: GoogleIdentity,
   role: UserRole = "both",
-): Promise<{ user: UserRow; provisioned: boolean }> {
+): Promise<{ user: UserRow; provisioned: boolean; rcWarning: string | null }> {
   const existing = await findUserByGoogleSub(identity.sub);
   if (existing) {
-    return { user: existing, provisioned: false };
+    return { user: existing, provisioned: false, rcWarning: null };
   }
 
-  const provisioned = await provisionGoogleUser({ email: identity.email });
-  const user = await upsertUser({
-    hiveUsername: provisioned.hiveUsername,
-    email: identity.email,
-    role,
-    authType: "google",
-    kmsKeyRef: provisioned.kmsKeyRef,
+  return withGoogleSubLock(identity.sub, async () => {
+    // Re-check inside the lock — a concurrent request may have provisioned
+    // this identity while we were waiting for it.
+    const existingInLock = await findUserByGoogleSub(identity.sub);
+    if (existingInLock) {
+      return { user: existingInLock, provisioned: false, rcWarning: null };
+    }
+
+    const provisioned = await provisionGoogleUser({ email: identity.email });
+    const user = await upsertUser({
+      hiveUsername: provisioned.hiveUsername,
+      email: identity.email,
+      role,
+      authType: "google",
+      kmsKeyRef: provisioned.kmsKeyRef,
+    });
+    await linkGoogleAccount(user.id, identity.sub);
+    return { user, provisioned: true, rcWarning: provisioned.rcWarning };
   });
-  await linkGoogleAccount(user.id, identity.sub);
-  return { user, provisioned: true };
 }

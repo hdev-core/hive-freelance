@@ -103,12 +103,9 @@ export function LoginPage() {
     setError(null);
     try {
       setStatus("Dev login…");
-      await apiFetch<AuthResponse>("/api/v1/auth/dev-login", {
+      await apiFetch<AuthResponse>("/api/v1/auth/dev-keychain-login", {
         method: "POST",
-        body: JSON.stringify({
-          username: username.trim() || "demo-client",
-          role,
-        }),
+        body: JSON.stringify({ role }),
       });
       setStatus("Logged in (dev)");
       navigate(dashboardPathForRole(role));
@@ -154,7 +151,7 @@ export function LoginPage() {
             />
             <div className="flex gap-2">
               <Button type="button" variant="secondary" onClick={() => void devLogin()}>
-                Dev sign in
+                Dev sign in (seeded account)
               </Button>
               <Select
                 aria-label="Role"
@@ -202,8 +199,9 @@ export function LoginPage() {
             <p>
               Don&apos;t have Keychain?{" "}
               <a
-                href="#"
-                onClick={(event) => event.preventDefault()}
+                href="https://chromewebstore.google.com/detail/hive-keychain/jcacnejopjdphbnjgfaaobbfafkihpep"
+                target="_blank"
+                rel="noreferrer"
                 className="font-medium text-text-primary hover:shadow-elevate"
               >
                 Get the extension

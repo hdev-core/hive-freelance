@@ -4,8 +4,14 @@ import type { UserRole } from "@hive-freelance/db";
 import { AppError, asyncHandler } from "../lib/errors.js";
 import { createChallenge, consumeChallenge } from "../lib/challengeStore.js";
 import {
+  devSeedUsername,
+  devSignerConfigured,
+  signChallengeWithSeedAccount,
+} from "../lib/devSeedSigner.js";
+import {
   getAccountRcStatus,
   getHiveAccount,
+  isValidHiveUsername,
   verifyPostingSignature,
 } from "../lib/hiveAuth.js";
 import {
@@ -27,6 +33,18 @@ import {
 } from "../services/users.js";
 
 export const authRouter = Router();
+
+/**
+ * Dev-only routes require both a non-production NODE_ENV *and* an explicit
+ * opt-in flag, so they can't accidentally be reachable in a misconfigured
+ * staging/preview environment where NODE_ENV isn't exactly "production".
+ */
+function devAuthRoutesEnabled(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.ENABLE_DEV_AUTH_ROUTES === "true"
+  );
+}
 
 function issueSession(
   res: import("express").Response,
@@ -60,6 +78,13 @@ authRouter.get(
     const username = String(req.query.username ?? "").trim();
     if (!username) {
       throw new AppError(400, "username query param required");
+    }
+    if (!isValidHiveUsername(username)) {
+      throw new AppError(
+        400,
+        "Enter a valid Hive username (3-16 lowercase letters, numbers, or hyphens per segment)",
+        "INVALID_USERNAME",
+      );
     }
     const account = await getHiveAccount(username);
     if (!account) {
@@ -116,28 +141,52 @@ authRouter.post(
   }),
 );
 
+/**
+ * Dev/local login using a real, seeded throwaway Hive account (mainnet —
+ * there's no usable public Hive testnet).
+ * Signs the challenge with a genuine posting key (see Auth_Guide.md) and
+ * runs it through the exact same verify path as a real Keychain login —
+ * replaces the old dev-login bypass, which skipped verification entirely.
+ */
 authRouter.post(
-  "/dev-login",
+  "/dev-keychain-login",
   asyncHandler(async (req, res) => {
-    if (process.env.NODE_ENV === "production") {
+    if (!devAuthRoutesEnabled()) {
       throw new AppError(404, "Not found");
     }
+    if (!devSignerConfigured()) {
+      throw new AppError(
+        501,
+        "DEV_SEED_HIVE_USERNAME / DEV_SEED_POSTING_KEY not set — see Auth_Guide.md",
+        "DEV_SIGNER_NOT_CONFIGURED",
+      );
+    }
     const body = z
-      .object({
-        username: z.string().min(1),
-        role: z.enum(["client", "freelancer", "both"]).optional(),
-      })
+      .object({ role: z.enum(["client", "freelancer", "both"]).optional() })
       .parse(req.body);
 
+    const username = devSeedUsername();
+    const { challenge } = createChallenge(username);
+    const signature = signChallengeWithSeedAccount(challenge);
+
+    if (!consumeChallenge(username, challenge)) {
+      throw new AppError(500, "Failed to consume freshly issued dev challenge");
+    }
+    const ok = await verifyPostingSignature(username, challenge, signature);
+    if (!ok) {
+      throw new AppError(500, "Dev seed signature failed real verification");
+    }
+
     const user = await upsertUser({
-      hiveUsername: body.username,
+      hiveUsername: username,
       role: body.role ?? "both",
       authType: "keychain",
     });
 
+    console.warn(`[auth] dev-keychain-login used for @${username}`);
     res.json({
       ...issueSession(res, user),
-      warning: "dev-login only — not for production",
+      warning: "dev-keychain-login only — not for production",
     });
   }),
 );
@@ -196,7 +245,8 @@ authRouter.get(
     const code = String(req.query.code ?? "");
     if (!code) throw new AppError(400, "Missing code");
     const identity = await exchangeGoogleCode(code);
-    const { user, provisioned } = await loginOrProvisionGoogle(identity);
+    const { user, provisioned, rcWarning } = await loginOrProvisionGoogle(identity);
+    if (rcWarning) console.warn(`[auth] ${rcWarning}`);
     const session = issueSession(res, user);
     const webOrigin = process.env.WEB_ORIGIN ?? "http://localhost:5173";
     // Redirect back to web with a simple query flag (cookie already set on API domain —
@@ -212,7 +262,7 @@ authRouter.get(
 authRouter.post(
   "/dev-google",
   asyncHandler(async (req, res) => {
-    if (process.env.NODE_ENV === "production") {
+    if (!devAuthRoutesEnabled()) {
       throw new AppError(404, "Not found");
     }
     const body = z
@@ -227,13 +277,15 @@ authRouter.post(
       email: body.email,
       sub: body.sub ?? `dev-google:${body.email}`,
     };
-    const { user, provisioned } = await loginOrProvisionGoogle(
+    console.warn(`[auth] dev-google used for ${body.email}`);
+    const { user, provisioned, rcWarning } = await loginOrProvisionGoogle(
       identity,
       body.role ?? "both",
     );
     res.json({
       ...issueSession(res, user),
       provisioned,
+      rc_warning: rcWarning ?? null,
       warning: "dev-google only — not for production",
     });
   }),

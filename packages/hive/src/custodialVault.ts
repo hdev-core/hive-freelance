@@ -1,34 +1,74 @@
 /**
  * In-memory KMS stub registry for per-user custodial keys (Google path).
- * Never logs secret material. Production replaces this with real KMS/HSM.
+ * Generates real secp256k1 keypairs (via hive-tx) so custodial accounts have
+ * genuine signing authority — never logs or returns private key material.
+ * Production replaces this with real KMS/HSM.
  */
+import { PrivateKey } from "hive-tx";
 
-const vault = new Map<string, { active?: string; owner?: string }>();
+type CustodialKeySet = {
+  owner: string;
+  active: string;
+  posting: string;
+  memo: string;
+};
 
-export function userActiveKeyRef(hiveUsername: string): string {
-  return `local:user:active:${hiveUsername}`;
-}
+export type CustodialPublicKeys = {
+  owner: string;
+  active: string;
+  posting: string;
+  memo: string;
+};
+
+const vault = new Map<string, CustodialKeySet>();
 
 export function userOwnerKeyRef(hiveUsername: string): string {
   return `local:user:owner:${hiveUsername}`;
 }
 
-export function putCustodialKeys(
+export function userActiveKeyRef(hiveUsername: string): string {
+  return `local:user:active:${hiveUsername}`;
+}
+
+export function userPostingKeyRef(hiveUsername: string): string {
+  return `local:user:posting:${hiveUsername}`;
+}
+
+export function userMemoKeyRef(hiveUsername: string): string {
+  return `local:user:memo:${hiveUsername}`;
+}
+
+/**
+ * Generates a real owner/active/posting/memo keypair for a newly provisioned
+ * custodial account and stores the private keys in the in-memory vault.
+ * Returns only the public keys (safe for account_create authorities / logs).
+ */
+export function generateCustodialKeys(
   hiveUsername: string,
-  keys: { active?: string; owner?: string },
-): { activeRef: string; ownerRef: string } {
-  const activeRef = userActiveKeyRef(hiveUsername);
-  const ownerRef = userOwnerKeyRef(hiveUsername);
+): CustodialPublicKeys {
+  const owner = PrivateKey.randomKey();
+  const active = PrivateKey.randomKey();
+  const posting = PrivateKey.randomKey();
+  const memo = PrivateKey.randomKey();
+
   vault.set(hiveUsername, {
-    active: keys.active ?? `stub-active-${hiveUsername}`,
-    owner: keys.owner ?? `stub-owner-${hiveUsername}`,
+    owner: owner.toString(),
+    active: active.toString(),
+    posting: posting.toString(),
+    memo: memo.toString(),
   });
-  return { activeRef, ownerRef };
+
+  return {
+    owner: owner.createPublic().toString(),
+    active: active.createPublic().toString(),
+    posting: posting.createPublic().toString(),
+    memo: memo.createPublic().toString(),
+  };
 }
 
 export function hasCustodialKey(
   hiveUsername: string,
-  which: "active" | "owner",
+  which: keyof CustodialKeySet,
 ): boolean {
   const entry = vault.get(hiveUsername);
   return Boolean(entry?.[which]);
@@ -39,12 +79,16 @@ export function wipeCustodialKeys(hiveUsername: string): void {
 }
 
 export function getCustodialPresence(hiveUsername: string): {
-  hasActive: boolean;
   hasOwner: boolean;
+  hasActive: boolean;
+  hasPosting: boolean;
+  hasMemo: boolean;
 } {
   const entry = vault.get(hiveUsername);
   return {
-    hasActive: Boolean(entry?.active),
     hasOwner: Boolean(entry?.owner),
+    hasActive: Boolean(entry?.active),
+    hasPosting: Boolean(entry?.posting),
+    hasMemo: Boolean(entry?.memo),
   };
 }
