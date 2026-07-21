@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@hive-freelance/shared": "*",
-    "@hiveio/wax": "^2.0.2"
+    "@hiveio/wax": "^2.0.2",
+    "hive-tx": "^7.2.0"
   }
 }

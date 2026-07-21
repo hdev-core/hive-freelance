@@ -3,8 +3,9 @@ import {
   createChain,
   createKmsSigner,
   creatorKeyRef,
-  putCustodialKeys,
+  generateCustodialKeys,
   userActiveKeyRef,
+  userOwnerKeyRef,
 } from "@hive-freelance/hive";
 
 export type ProvisionResult = {
@@ -67,7 +68,11 @@ export async function createHiveAccount(
   hiveUsername: string,
 ): Promise<ProvisionResult> {
   const live = isLive();
-  const { activeRef, ownerRef } = putCustodialKeys(hiveUsername, {});
+  // Real keypair, generated server-side and held only in the in-memory
+  // custodial vault — the WIF private keys never leave this process.
+  const publicKeys = generateCustodialKeys(hiveUsername);
+  const activeRef = userActiveKeyRef(hiveUsername);
+  const ownerRef = userOwnerKeyRef(hiveUsername);
 
   if (!live) {
     console.info(
@@ -78,7 +83,8 @@ export async function createHiveAccount(
       hiveUsername,
       kmsKeyRef: activeRef,
       ownerKeyRef: ownerRef,
-      message: "Dry-run: account_create not broadcast; custodial refs stored in local vault",
+      message:
+        "Dry-run: account_create not broadcast; real custodial keypair generated and held in local vault",
     };
   }
 
@@ -95,20 +101,43 @@ export async function createHiveAccount(
   }
 
   const chain = await createChain();
-  await chain.getDynamicGlobalProperties();
   await chain.close();
 
+  const fee = process.env.HIVE_ACCOUNT_CREATION_FEE ?? "3.000 HIVE";
+
   await kms.signWithKms(creator, keyRef, [
-    { account_create: { new_account_name: hiveUsername } },
+    {
+      account_create: {
+        fee,
+        creator,
+        new_account_name: hiveUsername,
+        owner: {
+          weight_threshold: 1,
+          account_auths: [],
+          key_auths: [[publicKeys.owner, 1]],
+        },
+        active: {
+          weight_threshold: 1,
+          account_auths: [],
+          key_auths: [[publicKeys.active, 1]],
+        },
+        posting: {
+          weight_threshold: 1,
+          account_auths: [],
+          key_auths: [[publicKeys.posting, 1]],
+        },
+        memo_key: publicKeys.memo,
+        json_metadata: "",
+      },
+    },
   ]);
 
   return {
-    dryRun: true,
+    dryRun: false,
     hiveUsername,
     kmsKeyRef: activeRef,
     ownerKeyRef: ownerRef,
-    message:
-      "Live mode connected to chain + KMS stub; full account_create broadcast TBD",
+    message: `account_create broadcast by @${creator} for @${hiveUsername} (via HIVE_API_NODE=${process.env.HIVE_API_NODE ?? "https://api.hive.blog"})`,
   };
 }
 
@@ -135,28 +164,25 @@ export async function delegateRc(hiveUsername: string): Promise<ProvisionResult>
 
   const kms = createKmsSigner();
   const keyRef = creatorKeyRef(creator);
+  const vestingShares = process.env.HIVE_RC_DELEGATION_VESTS ?? "10.000000 VESTS";
+
   await kms.signWithKms(creator, keyRef, [
-    { delegate_vesting_shares: { delegatee: hiveUsername } },
+    {
+      delegate_vesting_shares: {
+        delegator: creator,
+        delegatee: hiveUsername,
+        vesting_shares: vestingShares,
+      },
+    },
   ]);
 
   return {
-    dryRun: true,
+    dryRun: false,
     hiveUsername,
     kmsKeyRef: null,
     ownerKeyRef: null,
-    message: "Live mode KMS stub invoked for RC delegation (broadcast TBD)",
+    message: `delegate_vesting_shares broadcast by @${creator} for @${hiveUsername}`,
   };
-}
-
-export async function storeCustodialKey(
-  userId: number | string,
-  keyRef: string,
-): Promise<{ userId: string; keyRef: string }> {
-  const kms = createKmsSigner();
-  console.info(
-    `[provisioner] storeCustodialKey user=${userId} ref=${keyRef} mode=${kms.mode}`,
-  );
-  return { userId: String(userId), keyRef };
 }
 
 export async function provisionGoogleUser(opts: {
@@ -165,14 +191,28 @@ export async function provisionGoogleUser(opts: {
 }): Promise<{
   hiveUsername: string;
   account: ProvisionResult;
-  rc: ProvisionResult;
+  rc: ProvisionResult | null;
+  rcWarning: string | null;
   kmsKeyRef: string;
 }> {
   const hiveUsername =
     opts.hiveUsername ?? (await allocateHiveUsername(opts.email));
   const account = await createHiveAccount(hiveUsername);
-  const rc = await delegateRc(hiveUsername);
+
+  let rc: ProvisionResult | null = null;
+  let rcWarning: string | null = null;
+  try {
+    rc = await delegateRc(hiveUsername);
+  } catch (err) {
+    // The Hive account (or its dry-run placeholder) already exists at this
+    // point — don't lose the username/DB mapping over an RC failure. Surface
+    // it so the caller can warn the user and retry delegation later instead.
+    rcWarning = `RC delegation failed for @${hiveUsername}: ${
+      err instanceof Error ? err.message : String(err)
+    }. Account provisioned but may be unable to broadcast until RC is delegated.`;
+    console.error(`[provisioner] ${rcWarning}`);
+  }
+
   const kmsKeyRef = account.kmsKeyRef ?? userActiveKeyRef(hiveUsername);
-  await storeCustodialKey("pending", kmsKeyRef);
-  return { hiveUsername, account, rc, kmsKeyRef };
+  return { hiveUsername, account, rc, rcWarning, kmsKeyRef };
 }

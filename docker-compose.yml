@@ -4,7 +4,7 @@ services:
     container_name: hive-freelance-db
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_USER: hive
       POSTGRES_PASSWORD: hive

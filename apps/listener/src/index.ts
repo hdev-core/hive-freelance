@@ -17,7 +17,6 @@ import {
 
 const rootDir = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
 loadEnv({ path: resolve(rootDir, ".env") });
-loadEnv({ path: resolve(rootDir, ".env.example") });
 
 const pollMs = Number(process.env.LISTENER_POLL_MS ?? 3000);
 const startFromHead = process.env.LISTENER_START_FROM_HEAD !== "false";
