@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   closePool,
+  closePrisma,
   getListenerCursor,
   markHiveRecordsConfirmed,
   setListenerCursor,
@@ -128,6 +129,7 @@ async function main(): Promise<void> {
 async function shutdown() {
   running = false;
   await closePool();
+  await closePrisma();
   process.exit(0);
 }
 
@@ -137,5 +139,6 @@ process.on("SIGTERM", () => void shutdown());
 main().catch(async (err) => {
   console.error(err);
   await closePool();
+  await closePrisma();
   process.exit(1);
 });
