@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { OAuth2Client } from "google-auth-library";
-import { getPool, type UserRole, type UserRow } from "@hive-freelance/db";
+import { prisma, type UserRole, type UserRow } from "@hive-freelance/db";
 import { provisionGoogleUser } from "@hive-freelance/provisioner";
 import { AppError } from "../lib/errors.js";
 import {
@@ -71,29 +71,23 @@ export async function exchangeGoogleCode(
  * Serializes concurrent first-logins for the same Google identity with a
  * Postgres advisory lock, so two simultaneous callbacks (double-click,
  * browser retry) can't both provision a brand-new Hive account for the
- * same sub. The lock is scoped to a hash of `sub`, held for the duration
- * of the transaction, and released automatically on commit/rollback.
+ * same sub. Ported from a manual BEGIN/pg_advisory_xact_lock/COMMIT to a
+ * Prisma interactive transaction — same lock, same scope-to-transaction
+ * release semantics, just run via tx.$executeRaw instead of a raw pool
+ * client. Throwing inside `fn` rolls back (and releases the lock) exactly
+ * like the original's catch/ROLLBACK.
  */
 async function withGoogleSubLock<T>(
   sub: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const client = await getPool().connect();
   const lockKey = BigInt(
     `0x${createHash("sha256").update(sub).digest("hex").slice(0, 15)}`,
-  ).toString();
-  try {
-    await client.query("BEGIN");
-    await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [lockKey]);
-    const result = await fn();
-    await client.query("COMMIT");
-    return result;
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
+  );
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`;
+    return fn();
+  });
 }
 
 /**
@@ -125,6 +119,10 @@ export async function loginOrProvisionGoogle(
       kmsKeyRef: provisioned.kmsKeyRef,
     });
     await linkGoogleAccount(user.id, identity.sub);
-    return { user, provisioned: true, rcWarning: provisioned.rcWarning };
+    // NOTE: the provisioner on this branch no longer produces rcWarning
+    // (its `rc` is non-nullable now, no try/catch fallback) — hardcoded to
+    // null here rather than dropping the field, since routes/auth.ts still
+    // destructures rcWarning and that file isn't part of this port.
+    return { user, provisioned: true, rcWarning: null };
   });
 }
