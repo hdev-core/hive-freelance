@@ -276,3 +276,23 @@ export function toPaymentRow(p: PrismaPayment): PaymentRow {
     updated_at: p.updatedAt,
   };
 }
+
+import type { Milestone as PrismaMilestone } from "@prisma/client";
+import type { MilestoneRow } from "./types.js";
+
+export function toMilestoneRow(m: PrismaMilestone): MilestoneRow {
+  return {
+    id: m.id.toString(),
+    contract_id: m.contractId.toString(),
+    title: m.title,
+    description: m.description,
+    amount: m.amount.toString(),
+    milestone_order: m.milestoneOrder,
+    status: m.status as MilestoneRow["status"],
+    submitted_at: m.submittedAt,
+    approved_at: m.approvedAt,
+    hive_tx_id: m.hiveTxId,
+    created_at: m.createdAt,
+    updated_at: m.updatedAt,
+  };
+}
