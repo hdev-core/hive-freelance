@@ -195,3 +195,84 @@ export function toProfileRow(p: PrismaProfile): ProfileRow {
     updated_at: p.updatedAt,
   };
 }
+
+import type {
+  Job as PrismaJob,
+  Proposal as PrismaProposal,
+  Contract as PrismaContract,
+  Payment as PrismaPayment,
+} from "@prisma/client";
+import type {
+  JobRow,
+  ProposalRow,
+  ContractRow,
+  PaymentRow,
+} from "./types.js";
+
+export function toJobRow(j: PrismaJob): JobRow {
+  return {
+    id: j.id.toString(),
+    client_id: j.clientId.toString(),
+    title: j.title,
+    description: j.description,
+    budget: j.budget.toString(),
+    category: j.category,
+    skills_required: j.skillsRequired,
+    status: j.status as JobRow["status"],
+    created_at: j.createdAt,
+    updated_at: j.updatedAt,
+  };
+}
+
+export function toProposalRow(p: PrismaProposal): ProposalRow {
+  return {
+    id: p.id.toString(),
+    job_id: p.jobId.toString(),
+    freelancer_id: p.freelancerId.toString(),
+    cover_letter: p.coverLetter,
+    bid_amount: p.bidAmount.toString(),
+    status: p.status as ProposalRow["status"],
+    hive_tx_id: p.hiveTxId,
+    created_at: p.createdAt,
+    updated_at: p.updatedAt,
+  };
+}
+
+export function toContractRow(c: PrismaContract): ContractRow {
+  return {
+    id: c.id.toString(),
+    job_id: c.jobId.toString(),
+    proposal_id: c.proposalId.toString(),
+    client_id: c.clientId.toString(),
+    freelancer_id: c.freelancerId.toString(),
+    total_amount: c.totalAmount.toString(),
+    status: c.status as ContractRow["status"],
+    completed_by_client: c.completedByClient,
+    completed_by_freelancer: c.completedByFreelancer,
+    hive_tx_id: c.hiveTxId,
+    start_date: c.startDate,
+    end_date: c.endDate,
+    created_at: c.createdAt,
+    updated_at: c.updatedAt,
+  };
+}
+
+export function toPaymentRow(p: PrismaPayment): PaymentRow {
+  return {
+    id: p.id.toString(),
+    contract_id: p.contractId.toString(),
+    milestone_id: p.milestoneId.toString(),
+    amount: p.amount.toString(),
+    currency: p.currency as PaymentRow["currency"],
+    status: p.status as PaymentRow["status"],
+    escrow_id: p.escrowId,
+    hive_tx_id: p.hiveTxId,
+    freelancer_approve_tx_id: p.freelancerApproveTxId,
+    agent_approve_tx_id: p.agentApproveTxId,
+    release_tx_id: p.releaseTxId,
+    ratification_deadline: p.ratificationDeadline,
+    escrow_expiration: p.escrowExpiration,
+    created_at: p.createdAt,
+    updated_at: p.updatedAt,
+  };
+}

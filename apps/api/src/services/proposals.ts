@@ -1,8 +1,10 @@
 import { APP_ID } from "@hive-freelance/shared";
 import {
-  getPool,
-  type ContractRow,
-  type ProposalRow,
+  prisma,
+  isUniqueViolation,
+  toContractRow,
+  toProposalRow,
+  type Prisma,
 } from "@hive-freelance/db";
 import { AppError } from "../lib/errors.js";
 import { getJob } from "./jobs.js";
@@ -12,18 +14,18 @@ export async function listProposalsForJob(jobId: string, clientId: string) {
   if (job.client_id !== clientId) {
     throw new AppError(403, "Only the job client can list proposals");
   }
-  const result = await getPool().query<ProposalRow>(
-    `SELECT * FROM proposals WHERE job_id = $1 ORDER BY created_at DESC`,
-    [jobId],
-  );
-  return result.rows;
+  const proposals = await prisma.proposal.findMany({
+    where: { jobId: BigInt(jobId) },
+    orderBy: { createdAt: "desc" },
+  });
+  return proposals.map(toProposalRow);
 }
 
 export async function submitProposal(
   jobId: string,
   freelancerId: string,
   data: { cover_letter: string; bid_amount: number },
-): Promise<ProposalRow> {
+) {
   const job = await getJob(jobId);
   if (job.status !== "open") {
     throw new AppError(400, "Job is not open for proposals");
@@ -33,18 +35,17 @@ export async function submitProposal(
   }
 
   try {
-    const result = await getPool().query<ProposalRow>(
-      `
-      INSERT INTO proposals (job_id, freelancer_id, cover_letter, bid_amount)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *
-      `,
-      [jobId, freelancerId, data.cover_letter, data.bid_amount],
-    );
-    return result.rows[0]!;
+    const proposal = await prisma.proposal.create({
+      data: {
+        jobId: BigInt(jobId),
+        freelancerId: BigInt(freelancerId),
+        coverLetter: data.cover_letter,
+        bidAmount: data.bid_amount,
+      },
+    });
+    return toProposalRow(proposal);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "";
-    if (msg.includes("unique") || msg.includes("duplicate")) {
+    if (isUniqueViolation(err)) {
       throw new AppError(409, "Already proposed on this job");
     }
     throw err;
@@ -55,31 +56,26 @@ export async function withdrawProposal(
   proposalId: string,
   freelancerId: string,
 ): Promise<void> {
-  const result = await getPool().query<ProposalRow>(
-    `SELECT * FROM proposals WHERE id = $1`,
-    [proposalId],
-  );
-  const proposal = result.rows[0];
+  const proposal = await prisma.proposal.findUnique({
+    where: { id: BigInt(proposalId) },
+  });
   if (!proposal) throw new AppError(404, "Proposal not found");
-  if (proposal.freelancer_id !== freelancerId) {
+  if (proposal.freelancerId.toString() !== freelancerId) {
     throw new AppError(403, "Not your proposal");
   }
   if (proposal.status !== "pending") {
     throw new AppError(400, "Only pending proposals can be withdrawn");
   }
-  await getPool().query(`DELETE FROM proposals WHERE id = $1`, [proposalId]);
+  await prisma.proposal.delete({ where: { id: BigInt(proposalId) } });
 }
 
 export async function rejectProposal(proposalId: string, clientId: string) {
-  const pool = getPool();
-  const result = await pool.query<ProposalRow>(
-    `SELECT * FROM proposals WHERE id = $1`,
-    [proposalId],
-  );
-  const proposal = result.rows[0];
+  const proposal = await prisma.proposal.findUnique({
+    where: { id: BigInt(proposalId) },
+  });
   if (!proposal) throw new AppError(404, "Proposal not found");
 
-  const job = await getJob(proposal.job_id);
+  const job = await getJob(proposal.jobId.toString());
   if (job.client_id !== clientId) {
     throw new AppError(403, "Only the job client can reject");
   }
@@ -87,56 +83,47 @@ export async function rejectProposal(proposalId: string, clientId: string) {
     throw new AppError(400, "Proposal is not pending");
   }
 
-  const updated = await pool.query<ProposalRow>(
-    `UPDATE proposals SET status = 'rejected' WHERE id = $1 RETURNING *`,
-    [proposalId],
-  );
-  return updated.rows[0]!;
+  const updated = await prisma.proposal.update({
+    where: { id: BigInt(proposalId) },
+    data: { status: "rejected" },
+  });
+  return toProposalRow(updated);
 }
 
+/**
+ * Preserves the original's pessimistic locking: two clients accepting
+ * different proposals on the same job at the same instant must not both
+ * succeed. The original used `SELECT ... FOR UPDATE` inside a manual
+ * BEGIN/COMMIT/ROLLBACK; Prisma's typed API has no FOR UPDATE, so the lock
+ * itself is a raw query run *inside* a Prisma interactive transaction —
+ * everything after it (the actual writes) uses the normal typed API, still
+ * inside the same transaction. Throwing anywhere in here rolls the whole
+ * thing back automatically, same as the original's catch/ROLLBACK.
+ */
 export async function acceptProposal(proposalId: string, clientId: string) {
-  const pool = getPool();
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const result = await client.query<ProposalRow>(
-      `SELECT * FROM proposals WHERE id = $1 FOR UPDATE`,
-      [proposalId],
-    );
-    const proposal = result.rows[0];
+  const contract = await prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<
+      {
+        id: bigint;
+        job_id: bigint;
+        freelancer_id: bigint;
+        bid_amount: Prisma.Decimal;
+        status: string;
+      }[]
+    >`SELECT id, job_id, freelancer_id, bid_amount, status FROM proposals WHERE id = ${BigInt(proposalId)} FOR UPDATE`;
+
+    const proposal = locked[0];
     if (!proposal) throw new AppError(404, "Proposal not found");
 
-    const jobRes = await client.query(`SELECT * FROM jobs WHERE id = $1`, [
-      proposal.job_id,
-    ]);
-    const job = jobRes.rows[0] as {
-      id: string;
-      client_id: string;
-      status: string;
-    };
+    const job = await tx.job.findUnique({ where: { id: proposal.job_id } });
     if (!job) throw new AppError(404, "Job not found");
-    if (job.client_id !== clientId) {
+    if (job.clientId.toString() !== clientId) {
       throw new AppError(403, "Only the job client can accept");
     }
     if (proposal.status !== "pending") {
       throw new AppError(400, "Proposal is not pending");
     }
-
-    await client.query(
-      `UPDATE proposals SET status = 'accepted' WHERE id = $1`,
-      [proposalId],
-    );
-    await client.query(
-      `UPDATE proposals SET status = 'rejected' WHERE job_id = $1 AND id <> $2 AND status = 'pending'`,
-      [proposal.job_id, proposalId],
-    );
-    await client.query(
-      `UPDATE jobs SET status = 'in_progress' WHERE id = $1`,
-      [proposal.job_id],
-    );
-
-    // Import dynamically to avoid circular issues — use assert at accept time
-    if (job.client_id === proposal.freelancer_id) {
+    if (job.clientId === proposal.freelancer_id) {
       throw new AppError(
         403,
         "Cannot be both client and freelancer on the same contract",
@@ -144,47 +131,53 @@ export async function acceptProposal(proposalId: string, clientId: string) {
       );
     }
 
-    const contractRes = await client.query<ContractRow>(
-      `
-      INSERT INTO contracts (
-        job_id, proposal_id, client_id, freelancer_id, total_amount, status, start_date
-      ) VALUES ($1, $2, $3, $4, $5, 'active', now())
-      RETURNING *
-      `,
-      [
-        proposal.job_id,
-        proposal.id,
-        job.client_id,
-        proposal.freelancer_id,
-        proposal.bid_amount,
-      ],
-    );
-    const contract = contractRes.rows[0]!;
-    await client.query("COMMIT");
+    await tx.proposal.update({
+      where: { id: proposal.id },
+      data: { status: "accepted" },
+    });
+    await tx.proposal.updateMany({
+      where: {
+        jobId: proposal.job_id,
+        id: { not: proposal.id },
+        status: "pending",
+      },
+      data: { status: "rejected" },
+    });
+    await tx.job.update({
+      where: { id: proposal.job_id },
+      data: { status: "in_progress" },
+    });
 
-    const customJsonPayload = {
-      id: APP_ID,
-      json: JSON.stringify({
-        app_id: APP_ID,
-        type: "contract_created",
-        contract_id: contract.id,
-        job_id: contract.job_id,
-        proposal_id: contract.proposal_id,
-        client_id: contract.client_id,
-        freelancer_id: contract.freelancer_id,
-        total_amount: contract.total_amount,
-      }),
-      required_auths: [],
-      required_posting_auths: [], // filled by client username on broadcast
-    };
+    return tx.contract.create({
+      data: {
+        jobId: proposal.job_id,
+        proposalId: proposal.id,
+        clientId: job.clientId,
+        freelancerId: proposal.freelancer_id,
+        totalAmount: proposal.bid_amount,
+        status: "active",
+        startDate: new Date(),
+      },
+    });
+  });
 
-    return { contract, custom_json: customJsonPayload };
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
+  const custom_json = {
+    id: APP_ID,
+    json: JSON.stringify({
+      app_id: APP_ID,
+      type: "contract_created",
+      contract_id: contract.id.toString(),
+      job_id: contract.jobId.toString(),
+      proposal_id: contract.proposalId.toString(),
+      client_id: contract.clientId.toString(),
+      freelancer_id: contract.freelancerId.toString(),
+      total_amount: contract.totalAmount.toString(),
+    }),
+    required_auths: [],
+    required_posting_auths: [], // filled by client username on broadcast
+  };
+
+  return { contract: toContractRow(contract), custom_json };
 }
 
 export async function confirmAccept(
@@ -192,30 +185,26 @@ export async function confirmAccept(
   clientId: string,
   hiveTxId: string,
 ) {
-  const pool = getPool();
-  const proposal = await pool.query<ProposalRow>(
-    `SELECT * FROM proposals WHERE id = $1`,
-    [proposalId],
-  );
-  if (!proposal.rows[0]) throw new AppError(404, "Proposal not found");
+  const proposal = await prisma.proposal.findUnique({
+    where: { id: BigInt(proposalId) },
+  });
+  if (!proposal) throw new AppError(404, "Proposal not found");
 
-  const contract = await pool.query<ContractRow>(
-    `SELECT * FROM contracts WHERE proposal_id = $1`,
-    [proposalId],
-  );
-  const row = contract.rows[0];
-  if (!row) throw new AppError(404, "Contract not found");
-  if (row.client_id !== clientId) {
+  const existingContract = await prisma.contract.findUnique({
+    where: { proposalId: BigInt(proposalId) },
+  });
+  if (!existingContract) throw new AppError(404, "Contract not found");
+  if (existingContract.clientId.toString() !== clientId) {
     throw new AppError(403, "Only the client can confirm");
   }
 
-  await pool.query(`UPDATE proposals SET hive_tx_id = $2 WHERE id = $1`, [
-    proposalId,
-    hiveTxId,
-  ]);
-  const updated = await pool.query<ContractRow>(
-    `UPDATE contracts SET hive_tx_id = $2 WHERE id = $1 RETURNING *`,
-    [row.id, hiveTxId],
-  );
-  return updated.rows[0]!;
+  await prisma.proposal.update({
+    where: { id: BigInt(proposalId) },
+    data: { hiveTxId },
+  });
+  const updated = await prisma.contract.update({
+    where: { id: existingContract.id },
+    data: { hiveTxId },
+  });
+  return toContractRow(updated);
 }
