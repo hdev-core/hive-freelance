@@ -151,9 +151,13 @@ export async function getListenerCursor(): Promise<number> {
 }
 
 export async function setListenerCursor(block: number): Promise<void> {
-  await prisma.listenerState.update({
+  // upsert rather than update: the original raw-SQL UPDATE would silently
+  // no-op (0 rows, no error) if the 'default' row were ever missing — this
+  // is strictly safer, not just a workaround for the missing seed row.
+  await prisma.listenerState.upsert({
     where: { id: "default" },
-    data: { lastProcessedBlock: BigInt(block) },
+    update: { lastProcessedBlock: BigInt(block) },
+    create: { id: "default", lastProcessedBlock: BigInt(block) },
   });
 }
 
