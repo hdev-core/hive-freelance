@@ -4,6 +4,8 @@ Hive-based freelance marketplace (Upwork-style) with on-chain escrow. Internship
 
 Stack decisions live in [`Docs/[03] System_Architecture_Data_Model/[01] Tech_Stack.md`](Docs/[03]%20System_Architecture_Data_Model/[01]%20Tech_Stack.md).
 
+**Live frontend:** https://hive-freelance.vercel.app/ (API not deployed yet — see [`DEPLOYMENT.md`](DEPLOYMENT.md) §4)
+
 ## Stack map
 
 | Layer | Package / app |
