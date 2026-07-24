@@ -9,10 +9,6 @@ import {
 import { AppError } from "../lib/errors.js";
 import { assertNotSelfContract } from "../middleware/auth.js";
 
-function isUniqueViolation(err: unknown): boolean {
-  return Boolean(err && typeof err === "object" && (err as { code?: string }).code === "23505");
-}
-
 export async function upsertUser(opts: {
   hiveUsername: string;
   role?: UserRole;
