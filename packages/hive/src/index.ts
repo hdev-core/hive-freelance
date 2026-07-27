@@ -26,4 +26,10 @@ export {
   type CustodialPublicKeys,
 } from "./custodialVault.js";
 
+export {
+  buildCustomJsonDemo,
+  type BuildCustomJsonDemoOpts,
+  type CustomJsonDemoResult,
+} from "./waxTx.js";
+
 export { APP_ID, ESCROW_OP_TYPES, TRACKED_OP_TYPES } from "./chain.js";

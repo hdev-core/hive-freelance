@@ -25,7 +25,8 @@
 | `packages/hive/src/chain.ts` | `createChain`, WAX init attempt, condenser reads | Keep; extend later for WAX tx helper (Phase C) |
 | `packages/hive/src/kms.ts` | Local KMS signing stub | Keep (dry-run); no AWS KMS in M1 |
 | `packages/hive/src/custodialVault.ts` | Custodial key holding | Keep for provisioner |
-| `packages/hive/src/index.ts` | Package exports | Keep; export new `haf` / wax helpers when added |
+| `packages/hive/src/waxTx.ts` | WAX `custom_json` demo builder (Phase C) | Keep — M1 acceptance #3 |
+| `packages/hive/src/index.ts` | Package exports | Keep; exports `buildCustomJsonDemo` |
 | `packages/shared/src/index.ts` | `APP_ID`, escrow op names | Keep |
 | `apps/api/src/lib/hiveAuth.ts` | Account lookup, Keychain sig verify, RC warning | Keep; verify in Phase B |
 | `apps/api/src/lib/challengeStore.ts` | Single-use login challenges | Keep |

@@ -85,12 +85,15 @@ You are **done** only when all of these are true:
 
 ### Phase C — WAX build + `custom_json` broadcast/mock (close acceptance #3) (~1–2 days)
 
-| ID | Task | Files / area | Done when |
-|----|------|--------------|-----------|
-| **C1** | Add a small shared helper: build `custom_json` with **WAX** (not hand-shaped JSON only) | Prefer `packages/hive` (e.g. new `waxTx.ts` / extend `chain.ts`) | One function returns a WAX-built op/tx |
-| **C2** | Wire broadcast **or** documented mock | Testnet broadcast **or** mock returning `hive_tx_id` + dry-run flag | Logs show WAX path used |
-| **C3** | Expose a tiny demo endpoint or script | e.g. `POST /api/v1/health/wax-custom-json-demo` (dev-only) or `npm` script | Curl/UI triggers it |
-| **C4** | Capture acceptance evidence | Tx id / mock id + code path note | Checkbox #3 closed |
+> **C1 / C2 / C3 / C4 done✅** → [`[06] Phase_C_Wax_Custom_Json_Evidence.md`](./[06]%20Phase_C_Wax_Custom_Json_Evidence.md) · [`[07] Phase_C_What_We_Built_Plain_Language.md`](./[07]%20Phase_C_What_We_Built_Plain_Language.md)  
+> Default is mock (`WAX_CUSTOM_JSON_LIVE=false`). Demo endpoint needs `ENABLE_DEV_AUTH_ROUTES=true`.
+
+| ID | Task | Files / area | Done when | Status |
+|----|------|--------------|-----------|--------|
+| **C1** | Add a small shared helper: build `custom_json` with **WAX** (not hand-shaped JSON only) | Prefer `packages/hive` (e.g. new `waxTx.ts` / extend `chain.ts`) | One function returns a WAX-built op/tx | done✅ |
+| **C2** | Wire broadcast **or** documented mock | Testnet broadcast **or** mock returning `hive_tx_id` + dry-run flag | Logs show WAX path used | done✅ |
+| **C3** | Expose a tiny demo endpoint or script | e.g. `POST /api/v1/health/wax-custom-json-demo` (dev-only) or `npm` script | Curl/UI triggers it | done✅ |
+| **C4** | Capture acceptance evidence | Tx id / mock id + code path note | Checkbox #3 closed | done✅ |
 
 **Do not** use `@hiveio/dhive` anywhere. Prefer `@hiveio/wax` + `@hiveio/wax-signers-keychain` in browser.
 
@@ -168,7 +171,7 @@ Adjust Day 3+ after A2 (HAF infra reality).
 ## 8. Definition of done (copy for PR / card)
 
 - [ ] No `@hiveio/dhive` in dependencies or imports.
-- [ ] WAX used to build at least one `custom_json` (broadcast or mock) — evidence attached.
+- [x] WAX used to build at least one `custom_json` (broadcast or mock) — evidence attached. → [`[06]`](./[06]%20Phase_C_Wax_Custom_Json_Evidence.md) · plain language [`[07]`](./[07]%20Phase_C_What_We_Built_Plain_Language.md)
 - [x] Keychain challenge round-trip works — evidence attached. → [`[05] Phase_B_Keychain_Evidence.md`](./[05]%20Phase_B_Keychain_Evidence.md)
 - [ ] App reads Hive account/records **via HAF** — evidence attached (SQL/API response).
 - [ ] RC-delegation-on-provisioning remains a **stub** (dry-run default) — noted.
