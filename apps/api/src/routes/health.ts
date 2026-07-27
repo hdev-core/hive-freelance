@@ -1,12 +1,14 @@
 import { Router } from "express";
-import { pingDb } from "@hive-freelance/db";
+import { assertDbConnection } from "@hive-freelance/db";
 import { agentKeyRef, createChain, createKmsSigner } from "@hive-freelance/hive";
 
 export const healthRouter = Router();
 
 healthRouter.get("/health", async (_req, res, next) => {
   try {
-    const dbOk = await pingDb();
+    const dbOk = await assertDbConnection()
+      .then(() => true)
+      .catch(() => false);
     res.json({
       ok: dbOk,
       service: "api",

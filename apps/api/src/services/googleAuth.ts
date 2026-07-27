@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { OAuth2Client } from "google-auth-library";
-import { prisma, type UserRole, type UserRow } from "@hive-freelance/db";
+import { withAdvisoryLock, type UserRole, type UserRow } from "@hive-freelance/db";
 import { provisionGoogleUser } from "@hive-freelance/provisioner";
 import { AppError } from "../lib/errors.js";
 import {
@@ -71,11 +71,16 @@ export async function exchangeGoogleCode(
  * Serializes concurrent first-logins for the same Google identity with a
  * Postgres advisory lock, so two simultaneous callbacks (double-click,
  * browser retry) can't both provision a brand-new Hive account for the
- * same sub. Ported from a manual BEGIN/pg_advisory_xact_lock/COMMIT to a
- * Prisma interactive transaction — same lock, same scope-to-transaction
- * release semantics, just run via tx.$executeRaw instead of a raw pool
- * client. Throwing inside `fn` rolls back (and releases the lock) exactly
- * like the original's catch/ROLLBACK.
+ * same sub.
+ *
+ * Uses withAdvisoryLock (a dedicated session-mode connection), not
+ * prisma.$transaction + pg_advisory_xact_lock — the work inside this lock
+ * does a real on-chain Hive account provision (broadcast + KMS), which can
+ * exceed Prisma's 5s interactive-transaction timeout under load. If that
+ * happened, Prisma would abort the tx and release the lock while
+ * provisioning was still running — reopening the exact double-provision
+ * race this lock exists to prevent. The dedicated connection has no such
+ * timeout tied to it.
  */
 async function withGoogleSubLock<T>(
   sub: string,
@@ -84,10 +89,7 @@ async function withGoogleSubLock<T>(
   const lockKey = BigInt(
     `0x${createHash("sha256").update(sub).digest("hex").slice(0, 15)}`,
   );
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`;
-    return fn();
-  });
+  return withAdvisoryLock(lockKey, fn);
 }
 
 /**

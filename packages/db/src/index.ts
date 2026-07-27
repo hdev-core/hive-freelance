@@ -18,8 +18,9 @@ declare global {
   return this.toString();
 };
 
-export { closePool, getPool, pingDb } from "./pool.js";
-export type { Pool, PoolClient } from "./pool.js";
+export { withAdvisoryLock } from "./advisoryLock.js";
+
+// pool.ts (raw pg) removed — everything is on Prisma now.
 
 export type {
   AuthType,
