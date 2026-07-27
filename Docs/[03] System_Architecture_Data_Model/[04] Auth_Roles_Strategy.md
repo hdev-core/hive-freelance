@@ -136,7 +136,7 @@ sequenceDiagram
     API->>HiveNode: broadcast account_update2 (signed with custodial owner key via KMS)
     HiveNode-->>API: confirmed
     API->>KMS: irreversibly delete custodial key material for this user
-    API->>DB: mark user as self-custodial (auth_type = hive_native)
+    API->>DB: mark user as self-custodial (auth_type = claimed)
     API-->>React: "Your account is now fully yours. Install Keychain to continue."
 ```
 

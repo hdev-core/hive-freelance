@@ -12,16 +12,25 @@
     }
   },
   "scripts": {
+    "postinstall": "prisma generate",
     "build": "tsc -p tsconfig.json",
-    "migrate": "tsx src/migrate.ts",
-    "dev": "tsc -p tsconfig.json --watch"
+    "dev": "tsc -p tsconfig.json --watch",
+    "migrate": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev",
+    "generate": "prisma generate",
+    "seed": "tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
     "dotenv": "^16.6.1",
     "pg": "^8.14.1"
   },
   "devDependencies": {
     "@types/pg": "^8.11.11",
+    "prisma": "^6.19.3",
     "tsx": "^4.19.3"
   }
 }

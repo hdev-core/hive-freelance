@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
-import { closePool } from "@hive-freelance/db";
+import { closePrisma } from "@hive-freelance/db";
 import { errorHandler } from "./lib/errors.js";
 import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
@@ -57,7 +57,7 @@ const server = app.listen(port, () => {
 
 async function shutdown() {
   server.close();
-  await closePool();
+  await closePrisma();
   process.exit(0);
 }
 

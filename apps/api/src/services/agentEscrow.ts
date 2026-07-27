@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { getPool } from "@hive-freelance/db";
+import { prisma } from "@hive-freelance/db";
 import { agentKeyRef, createKmsSigner } from "@hive-freelance/hive";
 
 function agentAccount(): string {
@@ -19,17 +19,16 @@ export async function computeEscrowId(
   from: string,
   to: string,
 ): Promise<number> {
-  const pool = getPool();
   let salt = 0;
   for (;;) {
     const material = `${paymentId}:${from}:${to}:${salt}`;
     const hash = createHash("sha256").update(material).digest();
     const id = hash.readUInt32BE(0);
-    const clash = await pool.query(
-      `SELECT 1 FROM payments WHERE escrow_id = $1 AND id <> $2 LIMIT 1`,
-      [id, paymentId],
-    );
-    if ((clash.rowCount ?? 0) === 0) return id;
+    const clash = await prisma.payment.findFirst({
+      where: { escrowId: id, id: { not: BigInt(paymentId) } },
+      select: { id: true },
+    });
+    if (!clash) return id;
     salt += 1;
     if (salt > 1000) {
       throw new Error("Unable to allocate unique escrow_id");
@@ -85,24 +84,21 @@ export async function agentAutoApprove(opts: {
     agent_approve_tx_id = `agent-error-${opts.escrowId}`;
   }
 
-  await getPool().query(
-    `
-    INSERT INTO agent_signing_events (payment_id, escrow_id, operation_type, dry_run, details)
-    VALUES ($1, $2, 'escrow_approve', $3, $4)
-    `,
-    [
-      opts.paymentId,
-      opts.escrowId,
+  await prisma.agentSigningEvent.create({
+    data: {
+      paymentId: BigInt(opts.paymentId),
+      escrowId: opts.escrowId,
+      operationType: "escrow_approve",
       dryRun,
-      JSON.stringify({ from: opts.from, to: opts.to, agent, op }),
-    ],
-  );
+      details: { from: opts.from, to: opts.to, agent, op },
+    },
+  });
 
   if (agent_approve_tx_id) {
-    await getPool().query(
-      `UPDATE payments SET agent_approve_tx_id = $2 WHERE id = $1`,
-      [opts.paymentId, agent_approve_tx_id],
-    );
+    await prisma.payment.update({
+      where: { id: BigInt(opts.paymentId) },
+      data: { agentApproveTxId: agent_approve_tx_id },
+    });
   }
 
   return { dryRun, agent_approve_tx_id };
