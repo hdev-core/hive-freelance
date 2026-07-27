@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { CheckCircle2, Circle, KeyRound, Lock, ShieldCheck } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { apiFetch } from "../api";
+import { dashboardPathForRole, useAuth } from "../auth/AuthProvider";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Select } from "../components/ui/Select";
@@ -122,6 +123,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { showToast } = useToast();
+  const { refresh } = useAuth();
   const [username, setUsername] = useState("");
   const [role, setRole] = useState<Role>("client");
   const [status, setStatus] = useState("Idle");
@@ -148,7 +150,8 @@ export function LoginPage() {
     if (handledGoogleReturn.current) return;
     handledGoogleReturn.current = true;
     void apiFetch<Me>("/api/v1/auth/me")
-      .then((r) => {
+      .then(async (r) => {
+        await refresh();
         showToast(
           params.get("provisioned") === "1"
             ? "Google account created — signed in"
@@ -160,7 +163,7 @@ export function LoginPage() {
         showToast("Google sign-in didn't complete. Please try again.", "error");
         setGoogleReturnFailed(true);
       });
-  }, [params, navigate, showToast]);
+  }, [params, navigate, showToast, refresh]);
 
   async function keychainLogin(e: FormEvent) {
     e.preventDefault();
@@ -211,6 +214,7 @@ export function LoginPage() {
         showToast(verified.rc_warning, "error");
       }
       setStatus("Logged in");
+      await refresh();
       showToast("Signed in successfully");
       navigate(dashboardPathForRole(role));
     } catch (err) {
@@ -227,6 +231,7 @@ export function LoginPage() {
         body: JSON.stringify({ role }),
       });
       setStatus("Logged in (dev)");
+      await refresh();
       showToast("Signed in successfully");
       navigate(dashboardPathForRole(role));
     } catch (err) {
