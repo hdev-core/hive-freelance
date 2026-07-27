@@ -23,6 +23,9 @@ import { LoginPage } from "./pages/LoginPage";
 import { ClaimAccountPage } from "./pages/ClaimAccountPage";
 import { ContractPage } from "./pages/ContractPage";
 import { ContractsPage } from "./pages/ContractsPage";
+import { JobsListPage } from "./pages/JobsListPage";
+import { JobDetailPage } from "./pages/JobDetailPage";
+import { PostJobPage } from "./pages/PostJobPage";
 
 type DashboardNavItem = {
   path: string;
@@ -65,26 +68,9 @@ export function App() {
             />
           }
         />
-        <Route
-          path="jobs"
-          element={
-            <PlaceholderPage
-              title="Find Work"
-              description="The full job marketplace with search and filters lands in a later milestone."
-              icon={Briefcase}
-            />
-          }
-        />
-        <Route
-          path="jobs/:id"
-          element={
-            <PlaceholderPage
-              title="Job detail"
-              description="Full job details, escrow summary, and client profile land in a later milestone."
-              icon={Briefcase}
-            />
-          }
-        />
+        <Route path="jobs" element={<JobsListPage />} />
+        <Route path="jobs/new" element={<PostJobPage />} />
+        <Route path="jobs/:id" element={<JobDetailPage />} />
         <Route
           path="jobs/:id/apply"
           element={

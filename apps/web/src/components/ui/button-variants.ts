@@ -10,14 +10,14 @@ const variantStyles: Record<ButtonVariant, string> = {
   primary:
     "bg-accent text-text-inverse hover:bg-accent-hover hover:shadow-elevate active:bg-accent-pressed",
   secondary:
-    "bg-surface-muted text-text-primary border border-border hover:shadow-elevate hover:border-border-strong active:bg-surface",
+    "bg-surface-muted text-text-primary border border-border hover:bg-surface-muted hover:shadow-elevate hover:border-border-strong active:bg-surface",
   destructive:
     "bg-transparent text-text-primary border border-accent hover:bg-accent-subtle hover:shadow-elevate active:bg-accent-subtle-border",
   ghost:
     "bg-transparent text-text-secondary hover:bg-surface-muted hover:text-text-primary hover:shadow-elevate",
   /** High-contrast button that auto-inverts with theme (near-black on light, near-white on dark). */
   inverse:
-    "bg-text-primary text-canvas hover:opacity-90 hover:shadow-elevate active:opacity-80",
+    "bg-text-primary text-canvas hover:bg-text-primary hover:opacity-90 hover:shadow-elevate active:bg-text-primary active:opacity-80",
   /** Bordered, surface-colored button — e.g. third-party auth actions (Continue with Google). */
   outline:
     "bg-surface text-text-primary border border-border hover:bg-surface-muted hover:border-border-strong hover:shadow-elevate active:bg-surface-muted",
