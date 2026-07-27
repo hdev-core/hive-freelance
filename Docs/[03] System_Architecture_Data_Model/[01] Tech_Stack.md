@@ -2,7 +2,7 @@
 **Project:** Hive Freelance Escrow Platform   
 **Phase:** Planning - System Architecture & Data Model 
 
-> **Greateck standard:** WAX (`@hiveio/wax`) for transaction building/signing and HAF for chain data indexing. This doc follows that standard and documents trade-offs where MVP constraints apply.
+> **Greateck standard (architecture card 08 Jul):** WAX (`@hiveio/wax`) for building/signing transactions and `custom_json` ops — **not** `@hiveio/dhive`. **HAF** (PostgreSQL projection of the chain) for reading/indexing on-chain records — **not** a permanent hand-rolled block listener + cache table. Milestone 1 foundation acceptance follows this standard.
 
 ---
 
@@ -19,8 +19,8 @@ The stack was selected against three criteria: fit with Hive's ecosystem and Gre
 | Frontend | `React (TypeScript)` | Industry standard for dashboards. `@hiveio/signers-keychain` (WAX companion) handles Keychain browser integration for native Hive users. Google OAuth users bypass Keychain entirely — their transactions are signed server-side via KMS (see Provisioning Service row). |
 | Backend | `Node.js + Express` | Matches the frontend JS/TS ecosystem. `@hiveio/wax` runs natively in Node. Handles agent-side signing (escrow approve, provisioning ops). |
 | Database | `PostgreSQL` | Highly relational data model with strict FK integrity, especially around escrow state changes. Supports JSONB for caching Hive operation payloads. |
-| Blockchain (tx) | `@hiveio/wax` | Greateck standard. Multi-language OO library using the same C++ protocol code as Hive core — always protocol-compatible. Replaces `@hiveio/dhive`. Companion: `@hiveio/signers-keychain` for browser-side signing, `@hiveio/signers-external` for non-Keychain flows. |
-| Blockchain (read/index) | Custom listener (MVP) → HAF (Phase 2) | **MVP:** custom Node.js block stream listener + `hive_records` cache table. Defensible for MVP scale. **Phase 2:** migrate to HAF (Hive Application Framework) — a PostgreSQL extension that pushes Hive block data directly into SQL tables and handles fork reversion automatically. Our listener is a hand-rolled subset of what HAF provides. |
+| Blockchain (tx) | `@hiveio/wax` | Greateck standard. Multi-language OO library using the same C++ protocol code as Hive core — always protocol-compatible. Replaces `@hiveio/dhive`. Companion: `@hiveio/wax-signers-keychain` for browser-side signing. |
+| Blockchain (read/index) | **HAF** (required for Milestone 1 foundation) | Hive Application Framework: PostgreSQL projection of chain data (fork-aware). **Milestone 1 acceptance:** app reads Hive account/records via HAF. A temporary custom listener + `hive_records` may exist only as interim scaffolding while HAF is wired — it is **not** the target read path and must not satisfy M1 acceptance alone. |
 | Provisioning Service | Node.js (standalone) | Creates Hive accounts for Google OAuth users (`account_create` op). Delegates Resource Credits (`delegate_vesting_shares`) to new zero-RC accounts. Stores active keys in KMS for custodial Google users. |
 | Agent Account | Platform-held Hive account | Signs `escrow_approve` (auto-ratification) server-side via WAX + KMS immediately after escrow_transfer confirms. This account's active key is the highest-value secret in the system — it can move all escrowed funds. Must be stored in KMS/HSM, not an env var. See doc 05 for hardening requirements. |
 | Hosting | `Render / Railway` | Free tier supports Node.js and PostgreSQL. No infrastructure overhead for internship-scale demo. |
@@ -45,14 +45,16 @@ Hive's fee-less model and 3-second block time make it viable for the high-freque
 
 ---
 
-## HAF Trade-off (Custom Listener vs HAF)
+## HAF vs interim custom listener
 
-| | Custom Listener (MVP) | HAF (Phase 2) |
-|--|----------------------|---------------|
-| Infrastructure | Public API node only | Requires own hived node + sql_serializer plugin + PostgreSQL with HAF extension |
-| Fork handling | Manual (listener must detect and revert) | Automatic |
-| Query capability | Limited (only what listener writes to hive_records) | Full SQL over all Hive block data |
-| Setup complexity | Low | High (~62 hours full replay on fast hardware) |
-| Scale | MVP only | Production-grade |
+| | Interim custom listener | **HAF (Milestone 1 standard)** |
+|--|------------------------|--------------------------------|
+| Role | Temporary scaffold / optional sync helper | **Required** read/index path for foundation acceptance |
+| Infrastructure | Public API node only | hived + sql_serializer (or shared Greateck HAF) + PostgreSQL |
+| Fork handling | Manual | Automatic |
+| Query capability | Only what we write to `hive_records` | SQL over projected chain data |
+| Acceptance | Does **not** close M1 “read via HAF” | Closes M1 read criteria |
 
-For MVP, the custom listener is the right trade-off. Migrate to HAF before production.
+**Milestone 1 foundation also includes:** Keychain challenge scaffolding, and an RC-delegation-on-provisioning stub. This layer is shared plumbing — not marketplace feature logic.
+
+See: `Docs/[04] For Ali/[4.3] Tasks/[01] Milestone_1_Hive_Layer_Work_Plan.md`.

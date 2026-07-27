@@ -7,23 +7,24 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { CheckCircle2, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, X } from "lucide-react";
+import { cn } from "../../lib/cn";
 import { IconButton } from "./IconButton";
 
-type ToastItem = { id: number; message: string };
+export type ToastVariant = "success" | "error";
+
+type ToastItem = { id: number; message: string; variant: ToastVariant };
 
 type ToastContextValue = {
-  showToast: (message: string) => void;
+  showToast: (message: string, variant?: ToastVariant) => void;
 };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
-const DISPLAY_MS = 3200;
+const DISPLAY_MS = 4200;
 
 /**
- * Mounted once at the app root (outside <Routes>) so a toast triggered
- * right before a client-side navigate() — e.g. "signed in, redirecting to
- * dashboard" — stays visible across the route change instead of unmounting
- * with the page that triggered it.
+ * App-wide toast (shadcn-style primitive already used by the design system).
+ * Mounted once at the app root so toasts survive client-side navigations.
  */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -34,9 +35,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const showToast = useCallback(
-    (message: string) => {
+    (message: string, variant: ToastVariant = "success") => {
       const id = nextId.current++;
-      setToasts((prev) => [...prev, { id, message }]);
+      setToasts((prev) => [...prev, { id, message, variant }]);
       window.setTimeout(() => dismiss(id), DISPLAY_MS);
     },
     [dismiss],
@@ -52,23 +53,38 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-live="polite"
         aria-atomic="true"
       >
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            role="status"
-            className="animate-toast-in pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-3 shadow-elevate"
-          >
-            <CheckCircle2 size={18} className="shrink-0 text-success-text" />
-            <p className="flex-1 text-sm font-medium text-text-primary">{toast.message}</p>
-            <IconButton
-              aria-label="Dismiss"
-              onClick={() => dismiss(toast.id)}
-              className="h-7 w-7"
+        {toasts.map((toast) => {
+          const isError = toast.variant === "error";
+          return (
+            <div
+              key={toast.id}
+              role={isError ? "alert" : "status"}
+              className={cn(
+                "animate-toast-in pointer-events-auto flex w-full max-w-sm items-start gap-2 rounded-2xl border px-4 py-3 shadow-elevate",
+                isError
+                  ? "border-accent/30 bg-accent-subtle text-text-primary"
+                  : "border-border bg-surface text-text-primary",
+              )}
             >
-              <X size={14} />
-            </IconButton>
-          </div>
-        ))}
+              {isError ? (
+                <AlertCircle size={18} className="mt-0.5 shrink-0 text-accent" />
+              ) : (
+                <CheckCircle2
+                  size={18}
+                  className="mt-0.5 shrink-0 text-success-text"
+                />
+              )}
+              <p className="flex-1 text-sm font-medium">{toast.message}</p>
+              <IconButton
+                aria-label="Dismiss"
+                onClick={() => dismiss(toast.id)}
+                className="h-7 w-7"
+              >
+                <X size={14} />
+              </IconButton>
+            </div>
+          );
+        })}
       </div>
     </ToastContext.Provider>
   );
