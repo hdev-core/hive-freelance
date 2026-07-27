@@ -27,6 +27,11 @@ jobs:
       - name: Build
         run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
 
+      - name: Debug .vercel output locations
+        run: |
+          ls -la .vercel .vercel/output apps/web/.vercel apps/web/.vercel/output 2>&1 || true
+          cat .vercel/output/config.json 2>&1 || true
+
       - name: Deploy
         id: deploy
         timeout-minutes: 8
