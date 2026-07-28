@@ -5,6 +5,7 @@ export { Input, type InputProps } from "./Input";
 export { Textarea, type TextareaProps } from "./Textarea";
 export { Select, type SelectProps } from "./Select";
 export { Card, type CardProps } from "./Card";
+export { PageHeader, type PageHeaderProps } from "./PageHeader";
 export { Badge, type BadgeProps, type BadgeVariant } from "./Badge";
 export { Tag, type TagProps } from "./Tag";
 export { Avatar, type AvatarProps } from "./Avatar";
