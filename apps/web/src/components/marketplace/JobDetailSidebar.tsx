@@ -1,15 +1,18 @@
 import { Card } from "../ui/Card";
-import { Button } from "../ui/Button";
 import { LinkButton } from "../ui/LinkButton";
 import { ClientProfileSummary } from "./ClientProfileSummary";
-import type { MockJob } from "../../services/jobsService";
+import { MOCK_CURRENT_CLIENT_ID, type MockJob } from "../../services/jobsService";
 import { formatBudget } from "../../lib/formatBudget";
+import { useSession } from "../../hooks/useSession";
 
 const PLATFORM_FEE_PERCENT = 2;
 
 export function JobDetailSidebar({ job }: { job: MockJob }) {
   const budgetAmount = Number(job.budget);
   const feeAmount = Math.round(budgetAmount * (PLATFORM_FEE_PERCENT / 100));
+  const isOwnJob = job.client_id === MOCK_CURRENT_CLIENT_ID;
+  const { loading: sessionLoading, user } = useSession();
+  const isLoggedIn = !sessionLoading && !!user;
 
   return (
     <div className="flex flex-col gap-6">
@@ -23,12 +26,25 @@ export function JobDetailSidebar({ job }: { job: MockJob }) {
             </p>
           )}
         </div>
-        <LinkButton to={`/jobs/${job.id}/apply`} className="w-full">
-          Apply Now &rarr;
-        </LinkButton>
-        <Button variant="secondary" className="w-full" type="button">
-          Message Client
-        </Button>
+        {isOwnJob ? (
+          <p className="rounded-lg bg-surface-muted p-3 text-xs text-text-secondary">
+            This is your job posting. Freelancers can apply once it's open for proposals.
+          </p>
+        ) : (
+          <>
+            <LinkButton to={isLoggedIn ? "apply" : "/login"} className="w-full">
+              Apply Now &rarr;
+            </LinkButton>
+            <LinkButton
+              to={isLoggedIn ? "../../messages" : "/login"}
+              relative={isLoggedIn ? "path" : undefined}
+              variant="secondary"
+              className="w-full"
+            >
+              Message Client
+            </LinkButton>
+          </>
+        )}
       </Card>
 
       <Card>
