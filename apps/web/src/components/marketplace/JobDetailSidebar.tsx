@@ -5,11 +5,7 @@ import { MOCK_CURRENT_CLIENT_ID, type MockJob } from "../../services/jobsService
 import { formatBudget } from "../../lib/formatBudget";
 import { useSession } from "../../hooks/useSession";
 
-const PLATFORM_FEE_PERCENT = 2;
-
 export function JobDetailSidebar({ job }: { job: MockJob }) {
-  const budgetAmount = Number(job.budget);
-  const feeAmount = Math.round(budgetAmount * (PLATFORM_FEE_PERCENT / 100));
   const isOwnJob = job.client_id === MOCK_CURRENT_CLIENT_ID;
   const { loading: sessionLoading, user } = useSession();
   const isLoggedIn = !sessionLoading && !!user;
@@ -20,11 +16,6 @@ export function JobDetailSidebar({ job }: { job: MockJob }) {
         <div>
           <p className="text-sm text-text-secondary">{job.mock.pricing_type === "hourly" ? "Hourly price" : "Fixed price"}</p>
           <p className="mt-1 text-3xl font-bold text-text-primary">{formatBudget(job.budget, job.mock.pricing_type)}</p>
-          {job.mock.pricing_type === "fixed" && (
-            <p className="mt-2 text-xs text-text-muted">
-              Platform fee ({PLATFORM_FEE_PERCENT}%): {feeAmount.toLocaleString("en-US")} HBD &middot; paid by client
-            </p>
-          )}
         </div>
         {isOwnJob ? (
           <p className="rounded-lg bg-surface-muted p-3 text-xs text-text-secondary">
