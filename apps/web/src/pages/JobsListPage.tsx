@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { PageHeader, Card, LinkButton, Select } from "../components/ui";
+import { PageHeader, Card, Select } from "../components/ui";
 import { FilterSidebar, JobCard, type BudgetRangeValue } from "../components/marketplace";
 import { getAllSkills, getCategoryFacets, listJobs, type MockJob } from "../services/jobsService";
 
@@ -86,11 +86,6 @@ export function JobsListPage() {
       <PageHeader
         title="Find your next contract"
         subtitle={`${visibleItems.length} job${visibleItems.length === 1 ? "" : "s"} match your filters · all payments escrow-protected`}
-        actions={
-          <LinkButton to="/jobs/new" variant="primary">
-            Post a Job
-          </LinkButton>
-        }
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[17.5rem_1fr]">

@@ -26,6 +26,7 @@ import { ContractsPage } from "./pages/ContractsPage";
 import { JobsListPage } from "./pages/JobsListPage";
 import { JobDetailPage } from "./pages/JobDetailPage";
 import { PostJobPage } from "./pages/PostJobPage";
+import { ClientJobsPage } from "./pages/ClientJobsPage";
 
 type DashboardNavItem = {
   path: string;
@@ -136,25 +137,44 @@ export function App() {
 
       <Route path="client" element={<DashboardLayout role="client" walletBalance="0 HBD" />}>
         <Route index element={<Navigate to="/client/overview" replace />} />
-        {clientNav.map((item) => (
-          <Route
-            key={item.path}
-            path={item.path}
-            element={<PlaceholderPage title={item.title} description={item.description} icon={item.icon} />}
-          />
-        ))}
+        <Route path="jobs" element={<ClientJobsPage />} />
+        <Route path="jobs/new" element={<PostJobPage />} />
+        <Route path="jobs/:id" element={<JobDetailPage />} />
+        {clientNav
+          .filter((item) => item.path !== "jobs")
+          .map((item) => (
+            <Route
+              key={item.path}
+              path={item.path}
+              element={<PlaceholderPage title={item.title} description={item.description} icon={item.icon} />}
+            />
+          ))}
         <Route path="*" element={<Navigate to="/client/overview" replace />} />
       </Route>
 
       <Route path="freelancer" element={<DashboardLayout role="freelancer" walletBalance="0 HBD" />}>
         <Route index element={<Navigate to="/freelancer/overview" replace />} />
-        {freelancerNav.map((item) => (
-          <Route
-            key={item.path}
-            path={item.path}
-            element={<PlaceholderPage title={item.title} description={item.description} icon={item.icon} />}
-          />
-        ))}
+        <Route path="jobs" element={<JobsListPage />} />
+        <Route path="jobs/:id" element={<JobDetailPage />} />
+        <Route
+          path="jobs/:id/apply"
+          element={
+            <PlaceholderPage
+              title="Submit a proposal"
+              description="The milestone-based proposal builder lands in a later milestone."
+              icon={Send}
+            />
+          }
+        />
+        {freelancerNav
+          .filter((item) => item.path !== "jobs")
+          .map((item) => (
+            <Route
+              key={item.path}
+              path={item.path}
+              element={<PlaceholderPage title={item.title} description={item.description} icon={item.icon} />}
+            />
+          ))}
         <Route path="*" element={<Navigate to="/freelancer/overview" replace />} />
       </Route>
     </Routes>

@@ -10,7 +10,7 @@ import { formatBudget } from "../../lib/formatBudget";
 export function JobCard({ job }: { job: MockJob }) {
   return (
     <Card interactive>
-      <Link to={`/jobs/${job.id}`} className="flex flex-col gap-4">
+      <Link to={job.id} className="flex flex-col gap-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 text-xs text-text-secondary">
             <span className="font-medium">{job.category ?? "General"}</span>

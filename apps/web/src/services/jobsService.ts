@@ -91,6 +91,9 @@ export type MockJob = JobRow & { mock: MockJobExtras };
 
 const NETWORK_DELAY_MS = 550;
 
+/** Mock-only stand-in for the logged-in client's id — there's no auth session wired up yet. */
+export const MOCK_CURRENT_CLIENT_ID = "mock-current-client";
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -338,7 +341,7 @@ export async function createJob(
 
   const job: StoredJob = {
     id: String(nextId++),
-    client_id: "mock-current-client",
+    client_id: MOCK_CURRENT_CLIENT_ID,
     title: input.title,
     description: input.description,
     budget: input.budget.toFixed(2),
@@ -363,6 +366,18 @@ export async function createJob(
   };
   store.unshift(job);
   return hydrate(job);
+}
+
+/**
+ * Mock-only helper (no real endpoint): jobs posted by the current mock
+ * client, across every status. GET /jobs only supports filtering by a
+ * single `status` value (defaults "open"), so a real "my jobs" dashboard
+ * would need its own endpoint — this reads the mock store directly instead
+ * of going through listJobs().
+ */
+export async function listMyJobs(): Promise<MockJob[]> {
+  await delay(NETWORK_DELAY_MS);
+  return store.filter((job) => job.client_id === MOCK_CURRENT_CLIENT_ID).map(hydrate);
 }
 
 /** Mock-only helper (no real endpoint): category facet counts for the filter sidebar. */

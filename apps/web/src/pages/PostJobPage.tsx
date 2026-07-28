@@ -1,10 +1,13 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { PageHeader, Card, Input, Textarea, Select, Button } from "../components/ui";
 import { createJob } from "../services/jobsService";
 
 const CATEGORIES = ["Development", "Design", "Writing", "Marketing", "Video & Animation", "Data & AI"];
 
+// TODO(auth/roles): this page should only be reachable by clients once
+// role-based route protection exists — no real gating today, see App.tsx.
 export function PostJobPage() {
   const navigate = useNavigate();
 
@@ -39,7 +42,7 @@ export function PostJobPage() {
         },
         { pricing_type: pricingType },
       );
-      navigate(`/jobs/${job.id}`);
+      navigate(`../${job.id}`, { relative: "path" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to post job");
       setSubmitting(false);
@@ -49,7 +52,16 @@ export function PostJobPage() {
   const canSubmit = title.trim().length > 0 && description.trim().length > 0 && budgetNumber > 0 && !submitting;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
+      <Link
+        to=".."
+        relative="path"
+        className="flex w-fit items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary"
+      >
+        <ArrowLeft size={16} />
+        Back to jobs
+      </Link>
+
       <PageHeader title="Post a Job" subtitle="Describe the work — freelancers will apply once it's live." />
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_22.5rem]">
@@ -112,7 +124,7 @@ export function PostJobPage() {
           </Card>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 lg:sticky lg:top-6 lg:self-start">
           <Card className="flex flex-col gap-4">
             <div>
               <p className="text-sm text-text-secondary">Job summary</p>

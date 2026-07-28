@@ -51,7 +51,11 @@ export function JobDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Link to="/jobs" className="flex w-fit items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary">
+      <Link
+        to=".."
+        relative="path"
+        className="flex w-fit items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary"
+      >
         <ArrowLeft size={16} />
         Back to jobs
       </Link>
