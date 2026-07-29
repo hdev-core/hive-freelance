@@ -150,6 +150,9 @@ vite.config.ts.timestamp-*
 .env.local
 .env.*.local
 
+# Vercel
+.vercel
+
 # OS / IDE
 .DS_Store
 Thumbs.db

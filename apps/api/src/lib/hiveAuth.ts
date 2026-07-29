@@ -10,6 +10,20 @@ type JsonRpcResult<T> = { result?: T; error?: { message: string } };
 
 const apiNode = () => process.env.HIVE_API_NODE ?? "https://api.hive.blog";
 
+// Hive account name rules: 3-16 chars per segment, lowercase letters/digits/
+// hyphens, starts with a letter, no leading/trailing/double hyphens. Segments
+// can be dot-separated for sub-accounts (e.g. "parent.child").
+const HIVE_USERNAME_SEGMENT = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+
+export function isValidHiveUsername(username: string): boolean {
+  const name = username.trim().toLowerCase();
+  if (name.length === 0) return false;
+  return name.split(".").every((segment) => {
+    if (segment.length < 3 || segment.length > 16) return false;
+    return HIVE_USERNAME_SEGMENT.test(segment);
+  });
+}
+
 export async function getHiveAccount(
   username: string,
 ): Promise<HiveAccount | null> {
@@ -66,17 +80,6 @@ export async function verifyPostingSignature(
     } catch {
       // continue
     }
-  }
-
-  if (
-    process.env.NODE_ENV !== "production" &&
-    process.env.AUTH_RELAXED === "true" &&
-    sigRaw.length >= 40
-  ) {
-    console.warn(
-      "[auth] AUTH_RELAXED=true — accepting signature without ECDSA verify",
-    );
-    return true;
   }
 
   return false;

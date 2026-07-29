@@ -15,12 +15,15 @@ export {
 } from "./kms.js";
 
 export {
+  generateCustodialKeys,
   getCustodialPresence,
   hasCustodialKey,
-  putCustodialKeys,
   userActiveKeyRef,
+  userMemoKeyRef,
   userOwnerKeyRef,
+  userPostingKeyRef,
   wipeCustodialKeys,
+  type CustodialPublicKeys,
 } from "./custodialVault.js";
 
 export { APP_ID, ESCROW_OP_TYPES, TRACKED_OP_TYPES } from "./chain.js";

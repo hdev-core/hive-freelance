@@ -2,7 +2,7 @@ import { config as loadEnv } from "dotenv";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  closePool,
+  closePrisma,
   getListenerCursor,
   markHiveRecordsConfirmed,
   setListenerCursor,
@@ -17,7 +17,6 @@ import {
 
 const rootDir = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
 loadEnv({ path: resolve(rootDir, ".env") });
-loadEnv({ path: resolve(rootDir, ".env.example") });
 
 const pollMs = Number(process.env.LISTENER_POLL_MS ?? 3000);
 const startFromHead = process.env.LISTENER_START_FROM_HEAD !== "false";
@@ -128,7 +127,7 @@ async function main(): Promise<void> {
 
 async function shutdown() {
   running = false;
-  await closePool();
+  await closePrisma();
   process.exit(0);
 }
 
@@ -137,6 +136,6 @@ process.on("SIGTERM", () => void shutdown());
 
 main().catch(async (err) => {
   console.error(err);
-  await closePool();
+  await closePrisma();
   process.exit(1);
 });

@@ -7,6 +7,17 @@ type ChallengeEntry = {
 
 const store = new Map<string, ChallengeEntry>();
 const TTL_MS = 60_000;
+const SWEEP_MS = 5 * 60_000;
+
+// Challenges that are created but never consumed (abandoned logins) would
+// otherwise sit in the map forever. Sweep expired entries periodically.
+const sweepTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of store) {
+    if (now > entry.expiresAt) store.delete(key);
+  }
+}, SWEEP_MS);
+sweepTimer.unref?.();
 
 function normalizeUsername(username: string): string {
   return username.trim().toLowerCase();

@@ -1,0 +1,150 @@
+@import "./tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    @apply min-h-full bg-canvas text-text-primary;
+  }
+
+  body {
+    @apply font-sans antialiased;
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+
+  h1 {
+    @apply text-2xl font-bold leading-tight text-text-primary sm:text-3xl;
+  }
+
+  h2 {
+    @apply text-xl font-semibold leading-snug text-text-primary;
+  }
+
+  h3 {
+    @apply text-lg font-semibold leading-snug text-text-primary;
+  }
+
+  p {
+    @apply leading-relaxed;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  code {
+    @apply rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[0.85em] text-text-primary;
+  }
+
+  hr {
+    @apply border-border;
+  }
+
+  button {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border-0 bg-accent px-4 py-2 font-semibold text-text-inverse transition-shadow duration-150 hover:bg-accent-hover hover:shadow-elevate active:bg-accent-pressed disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  label {
+    @apply flex flex-col gap-1.5 text-sm font-medium text-text-secondary;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply min-w-[10rem] rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none transition-shadow duration-150 placeholder:text-text-muted focus:border-accent focus:shadow-elevate;
+  }
+}
+
+@layer components {
+  /* Legacy scaffold page shims — restyled with tokens, logic in these
+     pages is untouched. New pages should use the component library in
+     src/components/ui instead of these classes. */
+
+  .panel {
+    @apply rounded-2xl border border-border bg-surface p-6 shadow-sm;
+  }
+
+  .lede {
+    @apply max-w-2xl text-text-secondary;
+  }
+
+  .grid {
+    @apply mt-6 gap-4;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .grid article {
+    @apply rounded-xl border border-border bg-surface-muted p-4;
+  }
+
+  .actions {
+    @apply my-5 flex flex-wrap items-end gap-3;
+  }
+
+  .error {
+    @apply rounded-lg border border-accent-subtle-border bg-accent-subtle px-3 py-2 text-sm font-medium text-text-primary;
+  }
+
+  .notice {
+    @apply rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-text-secondary;
+  }
+
+  .sep {
+    @apply my-6 border-0 border-t border-border;
+  }
+
+  .claim-form {
+    @apply mt-4 grid gap-3;
+  }
+
+  .claim-form input {
+    @apply w-full min-w-0;
+  }
+
+  .detail {
+    @apply overflow-auto rounded-lg border border-border bg-surface-muted p-4 font-mono text-sm text-text-primary;
+  }
+
+  .job-list {
+    @apply mt-6 grid list-none gap-4 p-0 m-0;
+  }
+
+  .job-list li {
+    @apply rounded-xl border border-border bg-surface p-4 transition-shadow duration-150 hover:shadow-elevate;
+  }
+
+  .job-list span {
+    @apply my-1 block text-sm text-text-secondary;
+  }
+}
+
+@layer utilities {
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .animate-toast-in {
+    animation: toast-in 180ms ease-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-toast-in {
+      animation: none;
+    }
+  }
+}

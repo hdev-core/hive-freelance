@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
-import { closePool } from "@hive-freelance/db";
+import { closePrisma } from "@hive-freelance/db";
 import { errorHandler } from "./lib/errors.js";
 import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
@@ -21,7 +21,6 @@ import { stubsRouter } from "./routes/stubs.js";
 
 const rootDir = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
 loadEnv({ path: resolve(rootDir, ".env") });
-loadEnv({ path: resolve(rootDir, ".env.example") });
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
@@ -58,7 +57,7 @@ const server = app.listen(port, () => {
 
 async function shutdown() {
   server.close();
-  await closePool();
+  await closePrisma();
   process.exit(0);
 }
 

@@ -1,0 +1,116 @@
+/*
+ * Two-tier color token system.
+ *
+ * Tier 1 — Chrome tokens (canvas, surface, border, text, accent): strictly
+ * black / grey / red. Used for every structural UI element — layout,
+ * navigation, buttons, inputs, cards. Never introduce another hue here.
+ *
+ * Tier 2 — Semantic status tokens (success, warning): a small, separate
+ * palette used ONLY for status/state indicators (badges, pills, trend
+ * icons). Never used for chrome.
+ *
+ * All values are "R G B" triplets (no commas) so Tailwind can apply them
+ * through `rgb(var(--x) / <alpha-value>)` and support opacity modifiers.
+ */
+
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* Chrome — surfaces */
+  --color-canvas: 248 250 252;
+  --color-surface: 255 255 255;
+  --color-surface-muted: 241 245 249;
+
+  /* Chrome — borders */
+  --color-border: 226 232 240;
+  --color-border-strong: 203 213 225;
+
+  /* Chrome — text */
+  --color-text-primary: 15 23 42;
+  --color-text-secondary: 100 116 139;
+  --color-text-muted: 148 163 184;
+  --color-text-inverse: 255 255 255;
+
+  /* Chrome — red accent (the only non-neutral chrome hue) */
+  --color-accent: 227 19 55;
+  --color-accent-hover: 193 14 44;
+  --color-accent-pressed: 165 12 38;
+  --color-accent-subtle: 254 226 226;
+  --color-accent-subtle-border: 254 202 202;
+
+  /* Semantic status — separate small palette, status indicators only */
+  --color-success-bg: 236 253 245;
+  --color-success-text: 4 120 87;
+  --color-warning-bg: 254 243 199;
+  --color-warning-text: 146 64 14;
+
+  /* Elevation */
+  --shadow-color: 15 23 42;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Chrome — surfaces */
+  --color-canvas: 10 13 18;
+  --color-surface: 20 23 28;
+  --color-surface-muted: 27 31 38;
+
+  /* Chrome — borders */
+  --color-border: 40 45 53;
+  --color-border-strong: 58 64 74;
+
+  /* Chrome — text */
+  --color-text-primary: 245 245 247;
+  --color-text-secondary: 154 161 172;
+  --color-text-muted: 110 118 130;
+  --color-text-inverse: 255 255 255;
+
+  /* Chrome — red accent (brighter for dark-surface contrast) */
+  --color-accent: 255 61 90;
+  --color-accent-hover: 255 92 118;
+  --color-accent-pressed: 214 40 66;
+  --color-accent-subtle: 58 16 22;
+  --color-accent-subtle-border: 92 24 34;
+
+  /* Semantic status */
+  --color-success-bg: 6 47 33;
+  --color-success-text: 16 185 129;
+  --color-warning-bg: 45 31 6;
+  --color-warning-text: 245 158 11;
+
+  /* Elevation */
+  --shadow-color: 0 0 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    color-scheme: dark;
+
+    --color-canvas: 10 13 18;
+    --color-surface: 20 23 28;
+    --color-surface-muted: 27 31 38;
+
+    --color-border: 40 45 53;
+    --color-border-strong: 58 64 74;
+
+    --color-text-primary: 245 245 247;
+    --color-text-secondary: 154 161 172;
+    --color-text-muted: 110 118 130;
+    --color-text-inverse: 255 255 255;
+
+    --color-accent: 255 61 90;
+    --color-accent-hover: 255 92 118;
+    --color-accent-pressed: 214 40 66;
+    --color-accent-subtle: 58 16 22;
+    --color-accent-subtle-border: 92 24 34;
+
+    --color-success-bg: 6 47 33;
+    --color-success-text: 16 185 129;
+    --color-warning-bg: 45 31 6;
+    --color-warning-text: 245 158 11;
+
+    --shadow-color: 0 0 0;
+  }
+}

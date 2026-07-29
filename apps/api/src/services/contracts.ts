@@ -1,133 +1,132 @@
-import { getPool, type ContractRow, type MilestoneRow } from "@hive-freelance/db";
+import {
+  prisma,
+  toContractRow,
+  toMilestoneRow,
+  toPaymentRow,
+} from "@hive-freelance/db";
 import { AppError } from "../lib/errors.js";
 
 export async function listContracts(userId: string) {
-  const result = await getPool().query<ContractRow>(
-    `
-    SELECT * FROM contracts
-    WHERE client_id = $1 OR freelancer_id = $1
-    ORDER BY updated_at DESC
-    `,
-    [userId],
-  );
-  return result.rows;
+  const uid = BigInt(userId);
+  const contracts = await prisma.contract.findMany({
+    where: { OR: [{ clientId: uid }, { freelancerId: uid }] },
+    orderBy: { updatedAt: "desc" },
+  });
+  return contracts.map(toContractRow);
 }
 
 export async function getContract(contractId: string, userId: string) {
-  const pool = getPool();
-  const result = await pool.query<ContractRow>(
-    `SELECT * FROM contracts WHERE id = $1`,
-    [contractId],
-  );
-  const contract = result.rows[0];
+  const contract = await prisma.contract.findUnique({
+    where: { id: BigInt(contractId) },
+  });
   if (!contract) throw new AppError(404, "Contract not found");
-  if (contract.client_id !== userId && contract.freelancer_id !== userId) {
+  if (
+    contract.clientId.toString() !== userId &&
+    contract.freelancerId.toString() !== userId
+  ) {
     throw new AppError(403, "Not a party to this contract");
   }
 
-  const milestones = await pool.query<MilestoneRow>(
-    `SELECT * FROM milestones WHERE contract_id = $1 ORDER BY milestone_order ASC`,
-    [contractId],
-  );
-  const payments = await pool.query(
-    `SELECT * FROM payments WHERE contract_id = $1 ORDER BY created_at ASC`,
-    [contractId],
-  );
-
-  const client = await pool.query<{ id: string; hive_username: string }>(
-    `SELECT id, hive_username FROM users WHERE id = $1`,
-    [contract.client_id],
-  );
-  const freelancer = await pool.query<{ id: string; hive_username: string }>(
-    `SELECT id, hive_username FROM users WHERE id = $1`,
-    [contract.freelancer_id],
-  );
+  const [milestones, payments, client, freelancer] = await Promise.all([
+    prisma.milestone.findMany({
+      where: { contractId: contract.id },
+      orderBy: { milestoneOrder: "asc" },
+    }),
+    prisma.payment.findMany({
+      where: { contractId: contract.id },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.user.findUnique({
+      where: { id: contract.clientId },
+      select: { id: true, hiveUsername: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: contract.freelancerId },
+      select: { id: true, hiveUsername: true },
+    }),
+  ]);
 
   return {
-    ...contract,
-    milestones: milestones.rows,
-    payments: payments.rows,
+    ...toContractRow(contract),
+    milestones: milestones.map(toMilestoneRow),
+    payments: payments.map(toPaymentRow),
     parties: {
-      client: client.rows[0] ?? null,
-      freelancer: freelancer.rows[0] ?? null,
+      client: client
+        ? { id: client.id.toString(), hive_username: client.hiveUsername }
+        : null,
+      freelancer: freelancer
+        ? {
+            id: freelancer.id.toString(),
+            hive_username: freelancer.hiveUsername,
+          }
+        : null,
     },
   };
 }
 
 export async function completeContract(contractId: string, userId: string) {
-  const pool = getPool();
-  const result = await pool.query<ContractRow>(
-    `SELECT * FROM contracts WHERE id = $1`,
-    [contractId],
-  );
-  const contract = result.rows[0];
+  const contract = await prisma.contract.findUnique({
+    where: { id: BigInt(contractId) },
+  });
   if (!contract) throw new AppError(404, "Contract not found");
   if (contract.status !== "active") {
     throw new AppError(400, "Contract is not active");
   }
 
-  let completedByClient = contract.completed_by_client;
-  let completedByFreelancer = contract.completed_by_freelancer;
+  let completedByClient = contract.completedByClient;
+  let completedByFreelancer = contract.completedByFreelancer;
 
-  if (contract.client_id === userId) {
+  if (contract.clientId.toString() === userId) {
     completedByClient = true;
-  } else if (contract.freelancer_id === userId) {
+  } else if (contract.freelancerId.toString() === userId) {
     completedByFreelancer = true;
   } else {
     throw new AppError(403, "Not a party to this contract");
   }
 
   const both = completedByClient && completedByFreelancer;
-  const updated = await pool.query<ContractRow>(
-    `
-    UPDATE contracts SET
-      completed_by_client = $2,
-      completed_by_freelancer = $3,
-      status = CASE WHEN $4 THEN 'completed' ELSE status END,
-      end_date = CASE WHEN $4 THEN now() ELSE end_date END
-    WHERE id = $1
-    RETURNING *
-    `,
-    [contractId, completedByClient, completedByFreelancer, both],
-  );
-  return updated.rows[0]!;
+  const updated = await prisma.contract.update({
+    where: { id: contract.id },
+    data: {
+      completedByClient,
+      completedByFreelancer,
+      // CASE WHEN $both THEN 'completed' ELSE status END equivalent
+      ...(both ? { status: "completed", endDate: new Date() } : {}),
+    },
+  });
+  return toContractRow(updated);
 }
 
 const BLOCKING_MILESTONE = ["funded", "submitted", "approved", "released"];
 
 export async function cancelContract(contractId: string, userId: string) {
-  const pool = getPool();
-  const result = await pool.query<ContractRow>(
-    `SELECT * FROM contracts WHERE id = $1`,
-    [contractId],
-  );
-  const contract = result.rows[0];
+  const contract = await prisma.contract.findUnique({
+    where: { id: BigInt(contractId) },
+  });
   if (!contract) throw new AppError(404, "Contract not found");
-  if (contract.client_id !== userId && contract.freelancer_id !== userId) {
+  if (
+    contract.clientId.toString() !== userId &&
+    contract.freelancerId.toString() !== userId
+  ) {
     throw new AppError(403, "Not a party to this contract");
   }
   if (contract.status !== "active") {
     throw new AppError(400, "Contract is not active");
   }
 
-  const funded = await pool.query(
-    `
-    SELECT 1 FROM milestones
-    WHERE contract_id = $1 AND status = ANY($2::text[])
-    LIMIT 1
-    `,
-    [contractId, BLOCKING_MILESTONE],
-  );
-  if ((funded.rowCount ?? 0) > 0) {
+  const blockingMilestone = await prisma.milestone.findFirst({
+    where: { contractId: contract.id, status: { in: BLOCKING_MILESTONE } },
+  });
+  if (blockingMilestone) {
     throw new AppError(
       400,
       "Cannot cancel after milestones are funded — use cooperative refund or dispute",
     );
   }
 
-  const updated = await pool.query<ContractRow>(
-    `UPDATE contracts SET status = 'cancelled', end_date = now() WHERE id = $1 RETURNING *`,
-    [contractId],
-  );
-  return updated.rows[0]!;
+  const updated = await prisma.contract.update({
+    where: { id: contract.id },
+    data: { status: "cancelled", endDate: new Date() },
+  });
+  return toContractRow(updated);
 }

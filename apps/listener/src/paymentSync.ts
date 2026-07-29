@@ -1,4 +1,4 @@
-import { getPool } from "@hive-freelance/db";
+import { prisma } from "@hive-freelance/db";
 
 function agentAccount(): string {
   return process.env.AGENT_ACCOUNT ?? "hive-freelance-agent";
@@ -33,72 +33,53 @@ async function loadPaymentParties(escrowId: number): Promise<{
   agent_approve_tx_id: string | null;
   freelancer_approve_tx_id: string | null;
 } | null> {
-  const pool = getPool();
-  const paymentRes = await pool.query<{
-    id: string;
-    milestone_id: string;
-    status: string;
-    agent_approve_tx_id: string | null;
-    freelancer_approve_tx_id: string | null;
-    freelancer_username: string;
-  }>(
-    `
-    SELECT p.id, p.milestone_id, p.status,
-           p.agent_approve_tx_id, p.freelancer_approve_tx_id,
-           uf.hive_username AS freelancer_username
-    FROM payments p
-    JOIN contracts c ON c.id = p.contract_id
-    JOIN users uf ON uf.id = c.freelancer_id
-    WHERE p.escrow_id = $1
-    `,
-    [escrowId],
-  );
-  const row = paymentRes.rows[0];
-  if (!row) return null;
+  const payment = await prisma.payment.findFirst({
+    where: { escrowId },
+    include: { contract: { include: { freelancer: true } } },
+  });
+  if (!payment) return null;
   return {
-    id: row.id,
-    milestone_id: row.milestone_id,
-    status: row.status,
+    id: payment.id.toString(),
+    milestone_id: payment.milestoneId.toString(),
+    status: payment.status,
     agent: agentAccount(),
-    freelancer: row.freelancer_username,
-    agent_approve_tx_id: row.agent_approve_tx_id,
-    freelancer_approve_tx_id: row.freelancer_approve_tx_id,
+    freelancer: payment.contract.freelancer.hiveUsername,
+    agent_approve_tx_id: payment.agentApproveTxId,
+    freelancer_approve_tx_id: payment.freelancerApproveTxId,
   };
 }
 
 /** Both agent + freelancer escrow_approve seen in hive_records at LIB. */
-async function bothApprovesAtLib(escrowId: number, agent: string, freelancer: string) {
-  const pool = getPool();
-  const res = await pool.query<{ who: string | null }>(
-    `
+async function bothApprovesAtLib(
+  escrowId: number,
+  agent: string,
+  freelancer: string,
+) {
+  // JSONB path extraction (payload->>'who') + COALESCE + DISTINCT has no
+  // clean typed Prisma equivalent — kept as raw SQL, same as the row-lock
+  // pattern in proposals.ts.
+  const rows = await prisma.$queryRaw<{ who: string | null }[]>`
     SELECT DISTINCT COALESCE(payload->>'who', from_account) AS who
     FROM hive_records
     WHERE operation_type = 'escrow_approve'
-      AND escrow_id = $1
+      AND escrow_id = ${escrowId}
       AND confirmed = true
-    `,
-    [escrowId],
-  );
+  `;
   const whos = new Set(
-    res.rows.map((r) => (r.who ?? "").toLowerCase()).filter(Boolean),
+    rows.map((r) => (r.who ?? "").toLowerCase()).filter(Boolean),
   );
-  return (
-    whos.has(agent.toLowerCase()) && whos.has(freelancer.toLowerCase())
-  );
+  return whos.has(agent.toLowerCase()) && whos.has(freelancer.toLowerCase());
 }
 
 async function markEscrowed(paymentId: string, milestoneId: string) {
-  const pool = getPool();
-  await pool.query(`UPDATE payments SET status = 'escrowed' WHERE id = $1`, [
-    paymentId,
-  ]);
-  await pool.query(
-    `
-    UPDATE milestones SET status = 'funded'
-    WHERE id = $1 AND status IN ('pending', 'funded')
-    `,
-    [milestoneId],
-  );
+  await prisma.payment.update({
+    where: { id: BigInt(paymentId) },
+    data: { status: "escrowed" },
+  });
+  await prisma.milestone.updateMany({
+    where: { id: BigInt(milestoneId), status: { in: ["pending", "funded"] } },
+    data: { status: "funded" },
+  });
 }
 
 /**
@@ -106,44 +87,34 @@ async function markEscrowed(paymentId: string, milestoneId: string) {
  * Protocol auto-refunds to client; we mark payment refunded + milestone pending.
  */
 export async function resetMissedRatifications(): Promise<number> {
-  const pool = getPool();
-  const due = await pool.query<{
-    id: string;
-    milestone_id: string;
-  }>(
-    `
-    SELECT id, milestone_id FROM payments
-    WHERE status = 'awaiting_ratification'
-      AND ratification_deadline IS NOT NULL
-      AND ratification_deadline < now()
-      AND (
-        agent_approve_tx_id IS NULL
-        OR freelancer_approve_tx_id IS NULL
-      )
-    `,
-  );
+  const due = await prisma.payment.findMany({
+    where: {
+      status: "awaiting_ratification",
+      ratificationDeadline: { not: null, lt: new Date() },
+      OR: [{ agentApproveTxId: null }, { freelancerApproveTxId: null }],
+    },
+    select: { id: true, milestoneId: true },
+  });
 
-  for (const row of due.rows) {
-    await pool.query(
-      `
-      UPDATE payments
-      SET status = 'refunded',
-          hive_tx_id = NULL,
-          agent_approve_tx_id = NULL,
-          freelancer_approve_tx_id = NULL
-      WHERE id = $1
-      `,
-      [row.id],
-    );
-    await pool.query(
-      `UPDATE milestones SET status = 'pending' WHERE id = $1 AND status = 'funded'`,
-      [row.milestone_id],
-    );
+  for (const row of due) {
+    await prisma.payment.update({
+      where: { id: row.id },
+      data: {
+        status: "refunded",
+        hiveTxId: null,
+        agentApproveTxId: null,
+        freelancerApproveTxId: null,
+      },
+    });
+    await prisma.milestone.updateMany({
+      where: { id: row.milestoneId, status: "funded" },
+      data: { status: "pending" },
+    });
     console.info(
       `[paymentSync] missed ratification → refunded payment=${row.id} (re-fundable)`,
     );
   }
-  return due.rows.length;
+  return due.length;
 }
 
 /**
@@ -160,13 +131,10 @@ export async function syncPaymentFromEscrowOp(op: {
 }): Promise<void> {
   if (!op.confirmed || op.escrow_id == null) return;
 
-  // Ignore unrelated chain escrows unless they match our agent / app meta.
   if (
     op.operation_type.startsWith("escrow_") &&
     !isOurEscrowPayload(op.payload)
   ) {
-    // Still allow match by known escrow_id in our payments table below —
-    // but skip if payload has a different agent.
     const agent = op.payload.agent;
     if (typeof agent === "string" && agent !== agentAccount()) {
       return;
@@ -178,10 +146,10 @@ export async function syncPaymentFromEscrowOp(op: {
 
   if (op.operation_type === "escrow_transfer") {
     if (payment.status === "pending") {
-      await getPool().query(
-        `UPDATE payments SET status = 'awaiting_ratification' WHERE id = $1`,
-        [payment.id],
-      );
+      await prisma.payment.update({
+        where: { id: BigInt(payment.id) },
+        data: { status: "awaiting_ratification" },
+      });
     }
     return;
   }
@@ -191,25 +159,20 @@ export async function syncPaymentFromEscrowOp(op: {
       (op.payload.who as string | undefined) ?? op.from_account ?? "",
     ).toLowerCase();
 
+    // COALESCE(agent_approve_tx_id, $2) equivalent: only write if currently
+    // null — updateMany with a where-filter on the current value is a
+    // no-op when it's already set, same effect as COALESCE.
     if (who === payment.agent.toLowerCase()) {
-      await getPool().query(
-        `
-        UPDATE payments
-        SET agent_approve_tx_id = COALESCE(agent_approve_tx_id, $2)
-        WHERE id = $1
-        `,
-        [payment.id, `chain:${op.escrow_id}:agent`],
-      );
+      await prisma.payment.updateMany({
+        where: { id: BigInt(payment.id), agentApproveTxId: null },
+        data: { agentApproveTxId: `chain:${op.escrow_id}:agent` },
+      });
     }
     if (who === payment.freelancer.toLowerCase()) {
-      await getPool().query(
-        `
-        UPDATE payments
-        SET freelancer_approve_tx_id = COALESCE(freelancer_approve_tx_id, $2)
-        WHERE id = $1
-        `,
-        [payment.id, `chain:${op.escrow_id}:freelancer`],
-      );
+      await prisma.payment.updateMany({
+        where: { id: BigInt(payment.id), freelancerApproveTxId: null },
+        data: { freelancerApproveTxId: `chain:${op.escrow_id}:freelancer` },
+      });
     }
 
     const both = await bothApprovesAtLib(
@@ -219,7 +182,8 @@ export async function syncPaymentFromEscrowOp(op: {
     );
     if (
       both &&
-      (payment.status === "awaiting_ratification" || payment.status === "pending")
+      (payment.status === "awaiting_ratification" ||
+        payment.status === "pending")
     ) {
       await markEscrowed(payment.id, payment.milestone_id);
       console.info(
@@ -235,33 +199,29 @@ export async function syncPaymentFromEscrowOp(op: {
     const from = (op.payload.from as string | undefined) ?? op.from_account;
     const to = (op.payload.to as string | undefined) ?? null;
 
-    // Missed ratification / protocol refund to client before escrowed.
     const isRefundToClient =
       receiver != null && from != null && receiver === from;
     const isCooperativeRefund =
-      isRefundToClient &&
-      to != null &&
-      payment.status === "escrowed";
+      isRefundToClient && to != null && payment.status === "escrowed";
 
     if (
       isRefundToClient &&
-      (payment.status === "awaiting_ratification" || payment.status === "pending")
+      (payment.status === "awaiting_ratification" ||
+        payment.status === "pending")
     ) {
-      await getPool().query(
-        `
-        UPDATE payments
-        SET status = 'refunded',
-            hive_tx_id = NULL,
-            agent_approve_tx_id = NULL,
-            freelancer_approve_tx_id = NULL
-        WHERE id = $1
-        `,
-        [payment.id],
-      );
-      await getPool().query(
-        `UPDATE milestones SET status = 'pending' WHERE id = $1`,
-        [payment.milestone_id],
-      );
+      await prisma.payment.update({
+        where: { id: BigInt(payment.id) },
+        data: {
+          status: "refunded",
+          hiveTxId: null,
+          agentApproveTxId: null,
+          freelancerApproveTxId: null,
+        },
+      });
+      await prisma.milestone.update({
+        where: { id: BigInt(payment.milestone_id) },
+        data: { status: "pending" },
+      });
       console.info(
         `[paymentSync] pre-escrow refund → re-fundable payment=${payment.id}`,
       );
@@ -269,24 +229,24 @@ export async function syncPaymentFromEscrowOp(op: {
     }
 
     if (isCooperativeRefund || isRefundToClient) {
-      await getPool().query(
-        `UPDATE payments SET status = 'refunded' WHERE id = $1`,
-        [payment.id],
-      );
-      await getPool().query(
-        `UPDATE milestones SET status = 'pending' WHERE id = $1`,
-        [payment.milestone_id],
-      );
+      await prisma.payment.update({
+        where: { id: BigInt(payment.id) },
+        data: { status: "refunded" },
+      });
+      await prisma.milestone.update({
+        where: { id: BigInt(payment.milestone_id) },
+        data: { status: "pending" },
+      });
       return;
     }
 
-    await getPool().query(
-      `UPDATE payments SET status = 'released' WHERE id = $1`,
-      [payment.id],
-    );
-    await getPool().query(
-      `UPDATE milestones SET status = 'released' WHERE id = $1`,
-      [payment.milestone_id],
-    );
+    await prisma.payment.update({
+      where: { id: BigInt(payment.id) },
+      data: { status: "released" },
+    });
+    await prisma.milestone.update({
+      where: { id: BigInt(payment.milestone_id) },
+      data: { status: "released" },
+    });
   }
 }
