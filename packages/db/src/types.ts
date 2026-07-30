@@ -34,14 +34,21 @@ export type UserRow = {
   updated_at: Date;
 };
 
+export type PortfolioLink = {
+  title: string;
+  url: string;
+};
+
 export type ProfileRow = {
   id: string;
   user_id: string;
+  display_name: string | null;
   bio: string | null;
   avatar_url: string | null;
   location: string | null;
   hourly_rate: string | null;
   skills: string[] | null;
+  portfolio_links: PortfolioLink[] | null;
   created_at: Date;
   updated_at: Date;
 };

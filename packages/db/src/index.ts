@@ -39,6 +39,7 @@ export type {
   PaymentCurrency,
   PaymentRow,
   PaymentStatus,
+  PortfolioLink,
   ProfileRow,
   ProposalRow,
   ProposalStatus,
@@ -172,7 +173,7 @@ import type {
   User as PrismaUser,
   Profile as PrismaProfile,
 } from "@prisma/client";
-import type { ProfileRow, UserRow } from "./types.js";
+import type { PortfolioLink, ProfileRow, UserRow } from "./types.js";
 
 export function toUserRow(u: PrismaUser): UserRow {
   return {
@@ -191,11 +192,19 @@ export function toProfileRow(p: PrismaProfile): ProfileRow {
   return {
     id: p.id.toString(),
     user_id: p.userId.toString(),
+    display_name: p.displayName,
     bio: p.bio,
     avatar_url: p.avatarUrl,
     location: p.location,
     hourly_rate: p.hourlyRate?.toString() ?? null,
     skills: p.skills,
+    // Defensive only: the DB CHECK constraint guarantees array shape + max
+    // length, but not per-element {title, url} shape (that's enforced by
+    // Zod at the route layer on write). This just stops a read from
+    // crashing on legacy/malformed data instead of validating it.
+    portfolio_links: Array.isArray(p.portfolioLinks)
+      ? (p.portfolioLinks as PortfolioLink[])
+      : null,
     created_at: p.createdAt,
     updated_at: p.updatedAt,
   };

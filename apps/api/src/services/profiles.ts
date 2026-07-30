@@ -5,6 +5,7 @@ import {
   toProposalRow,
   toPaymentRow,
   type ProfileRow,
+  type PortfolioLink,
 } from "@hive-freelance/db";
 import { AppError } from "../lib/errors.js";
 import { getUserByUsername } from "./users.js";
@@ -29,32 +30,39 @@ export async function getPublicProfile(username: string) {
 export async function updateProfile(
   userId: string,
   data: {
+    display_name?: string | null;
     bio?: string | null;
     avatar_url?: string | null;
     location?: string | null;
     hourly_rate?: number | null;
     skills?: string[] | null;
+    portfolio_links?: PortfolioLink[] | null;
   },
 ): Promise<ProfileRow> {
   // Matches the original's COALESCE-on-update behavior: a field is only
   // written if it's actually provided (not null/undefined) — same
   // pre-existing quirk as before, not something introduced by the port.
   const updateData: Record<string, unknown> = {};
+  if (data.display_name != null) updateData.displayName = data.display_name;
   if (data.bio != null) updateData.bio = data.bio;
   if (data.avatar_url != null) updateData.avatarUrl = data.avatar_url;
   if (data.location != null) updateData.location = data.location;
   if (data.hourly_rate != null) updateData.hourlyRate = data.hourly_rate;
   if (data.skills != null) updateData.skills = data.skills;
+  if (data.portfolio_links != null)
+    updateData.portfolioLinks = data.portfolio_links;
 
   const profile = await prisma.profile.upsert({
     where: { userId: BigInt(userId) },
     create: {
       userId: BigInt(userId),
+      displayName: data.display_name ?? null,
       bio: data.bio ?? null,
       avatarUrl: data.avatar_url ?? null,
       location: data.location ?? null,
       hourlyRate: data.hourly_rate ?? null,
       skills: data.skills ?? undefined,
+      portfolioLinks: data.portfolio_links ?? undefined,
     },
     update: updateData,
   });
