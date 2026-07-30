@@ -41,10 +41,10 @@ You are **done** only when all of these are true:
 
 | Requirement | Status in code today | Gap |
 |-------------|----------------------|-----|
-| WAX as tx library (no dhive) | **Partial** — `@hiveio/wax` installed; `createChain` inits WAX; many reads still condenser RPC; broadcasts often Keychain/dry-run, not full WAX tx builder path | Finish WAX build + broadcast/mock demo |
-| HAF for read/index | **Missing** — `apps/listener` + `hive_records` is the hand-rolled path; comments still say “Phase 2 HAF” | Introduce HAF read path; retire listener as *source of truth* for M1 acceptance |
-| Keychain challenge scaffolding | **Mostly done** — `/auth/challenge` + `/auth/verify` + Login/Keychain pages | Document proof + fix any broken smoke path |
-| RC-delegation-on-provisioning stub | **Mostly done** — `apps/provisioner` `delegateRc()` dry-run / live flag | Keep stub; prove dry-run in demo notes |
+| WAX as tx library (no dhive) | **Done (M1)** — WAX `custom_json` demo + no `@hiveio/dhive`; reads may still use condenser RPC where appropriate | — |
+| HAF for read/index | **Done (local compatible)** — `HAF_DATABASE_URL` + `packages/hive` `haf.ts` + `/api/v1/hive/accounts/:name` | Shared Greateck URL optional later; evidence in `[08]` |
+| Keychain challenge scaffolding | **Done** — evidence `[05]` | — |
+| RC-delegation-on-provisioning stub | **Done** — dry-run default proven; evidence `[10]` | Keep stub; no live RC pool in M1 |
 | Backend scaffold | **Done** | — |
 
 ---
@@ -99,31 +99,39 @@ You are **done** only when all of these are true:
 
 ### Phase D — HAF read path (close acceptance #1) (~2–4 days, depends on A2)
 
-| ID | Task | Files / area | Done when |
-|----|------|--------------|-----------|
-| **D1** | Set up or connect to HAF PostgreSQL projection (per A2 decision) | Infra / compose / env | Can `SELECT` HAF account/op tables |
-| **D2** | Add `packages/hive` (or `packages/db`) **HAF reader** module | New module e.g. `haf.ts` | `getAccount` / recent ops via SQL |
-| **D3** | Expose API read: Hive account + sample records **from HAF** | `apps/api` health or `/hive/accounts/:name` | Response sourced from HAF, not condenser-only |
-| **D4** | Document how M1 apps should read chain data | Update Local Dev + this plan’s “Done definition” | Team knows: **reads → HAF** |
-| **D5** | Demote custom listener for M1 acceptance | Keep listener only if still needed for escrow sync interim; **acceptance reads must be HAF** | Checkbox #1 closed |
+> **D1–D5 done✅** → [`[08] Phase_D_HAF_Read_Evidence.md`](./[08]%20Phase_D_HAF_Read_Evidence.md)  
+> Local HAF-compatible DB `hive_haf` / `hafd.*` via `HAF_DATABASE_URL`. Listener remains interim for escrow only.
 
-> If full HAF infra is blocked: land an **adapter interface** (`HiveReadStore`) with a HAF implementation stub + SQL schema notes, and escalate — but the **task card requires HAF**, so do not mark M1 complete on listener-only reads.
+| ID | Task | Files / area | Done when | Status |
+|----|------|--------------|-----------|--------|
+| **D1** | Set up or connect to HAF PostgreSQL projection (per A2 decision) | Infra / compose / env | Can `SELECT` HAF account/op tables | done✅ |
+| **D2** | Add `packages/hive` (or `packages/db`) **HAF reader** module | New module e.g. `haf.ts` | `getAccount` / recent ops via SQL | done✅ |
+| **D3** | Expose API read: Hive account + sample records **from HAF** | `apps/api` health or `/hive/accounts/:name` | Response sourced from HAF, not condenser-only | done✅ |
+| **D4** | Document how M1 apps should read chain data | Update Local Dev + this plan’s “Done definition” | Team knows: **reads → HAF** | done✅ |
+| **D5** | Demote custom listener for M1 acceptance | Keep listener only if still needed for escrow sync interim; **acceptance reads must be HAF** | Checkbox #1 closed | done✅ |
+
+> Local path is a **HAF-compatible** `hafd` projection (not full hived replay). Shared Greateck URL can replace `HAF_DATABASE_URL` later — see schema map in `[08]`.
 
 ### Phase E — RC delegation stub (confirm, don’t expand) (~0.5 day)
 
-| ID | Task | Files / area | Done when |
-|----|------|--------------|-----------|
-| **E1** | Confirm `delegateRc` dry-run path | `apps/provisioner` | Log line with dry-run message |
-| **E2** | Env flags documented | `.env.example` `PROVISIONER_LIVE`, `HIVE_RC_DELEGATION_VESTS` | Matches Auth/Local guides |
-| **E3** | Note in evidence pack | “RC stub: dry-run by default” | M1 scope respected (stub, not live pool) |
+> **E1 / E2 / E3 done✅** → [`[10] Phase_E_RC_Stub_Evidence.md`](./[10]%20Phase_E_RC_Stub_Evidence.md)  
+> Dry-run by default (`PROVISIONER_LIVE=false`). Smoke: `node scripts/smoke-rc-dry-run.mjs`.
+
+| ID | Task | Files / area | Done when | Status |
+|----|------|--------------|-----------|--------|
+| **E1** | Confirm `delegateRc` dry-run path | `apps/provisioner` | Log line with dry-run message | done✅ |
+| **E2** | Env flags documented | `.env.example` `PROVISIONER_LIVE`, `HIVE_RC_DELEGATION_VESTS` | Matches Auth/Local guides | done✅ |
+| **E3** | Note in evidence pack | “RC stub: dry-run by default” | M1 scope respected (stub, not live pool) | done✅ |
 
 ### Phase F — Docs, cleanup, handoff (~0.5–1 day)
 
-| ID | Task | Done when |
-|----|------|-----------|
-| **F1** | Tech stack / architecture docs say **WAX + HAF** as M1 standard | No “HAF only Phase 2” as if M1 ignores HAF |
-| **F2** | Short demo script in this Tasks folder (or Additional Docs) | Another teammate can reproduce acceptance in &lt;15 min |
-| **F3** | Self-check against §2 acceptance | All three checkboxes + scaffold |
+> **F1 / F2 / F3 done✅** → demo script [`[11] M1_Demo_Script_15min.md`](./[11]%20M1_Demo_Script_15min.md) · HAF handoff [`[09]`](./[09]%20Phase_D_HAF_Handoff_for_Laure.md)
+
+| ID | Task | Done when | Status |
+|----|------|-----------|--------|
+| **F1** | Tech stack / architecture docs say **WAX + HAF** as M1 standard | No “HAF only Phase 2” as if M1 ignores HAF | done✅ |
+| **F2** | Short demo script in this Tasks folder (or Additional Docs) | Another teammate can reproduce acceptance in &lt;15 min | done✅ → `[11]` |
+| **F3** | Self-check against §2 acceptance | All three checkboxes + scaffold | done✅ |
 
 ---
 
@@ -170,13 +178,15 @@ Adjust Day 3+ after A2 (HAF infra reality).
 
 ## 8. Definition of done (copy for PR / card)
 
-- [ ] No `@hiveio/dhive` in dependencies or imports.
+- [x] No `@hiveio/dhive` in dependencies or imports. (`npm ls @hiveio/dhive` → empty, 2026-07-30)
 - [x] WAX used to build at least one `custom_json` (broadcast or mock) — evidence attached. → [`[06]`](./[06]%20Phase_C_Wax_Custom_Json_Evidence.md) · plain language [`[07]`](./[07]%20Phase_C_What_We_Built_Plain_Language.md)
 - [x] Keychain challenge round-trip works — evidence attached. → [`[05] Phase_B_Keychain_Evidence.md`](./[05]%20Phase_B_Keychain_Evidence.md)
-- [ ] App reads Hive account/records **via HAF** — evidence attached (SQL/API response).
-- [ ] RC-delegation-on-provisioning remains a **stub** (dry-run default) — noted.
-- [ ] Docs updated so M1 standard is **WAX + HAF**, not “listener forever.”
-- [ ] This work stays **shared Hive layer**, not new feature logic.
+- [x] App reads Hive account/records **via HAF** — evidence attached (SQL/API response). → [`[08] Phase_D_HAF_Read_Evidence.md`](./[08]%20Phase_D_HAF_Read_Evidence.md)
+- [x] RC-delegation-on-provisioning remains a **stub** (dry-run default) — noted. → [`[10] Phase_E_RC_Stub_Evidence.md`](./[10]%20Phase_E_RC_Stub_Evidence.md)
+- [x] Docs updated so M1 standard is **WAX + HAF**, not “listener forever.”
+- [x] This work stays **shared Hive layer**, not new feature logic.
+
+Demo replay: [`[11] M1_Demo_Script_15min.md`](./[11]%20M1_Demo_Script_15min.md).
 
 ---
 
@@ -193,7 +203,7 @@ Adjust Day 3+ after A2 (HAF infra reality).
 
 ## 10. One-line status template (standup)
 
-> “M1 Hive layer: Keychain [ ] / WAX custom_json [ ] / HAF reads [ ] / RC stub [x] — blocker: ___.”
+> “M1 Hive layer: Keychain [x] / WAX custom_json [x] / HAF reads [x] / RC stub [x] — blocker: none (shared Greateck HAF URL optional; Laure sign-off on A2 still open in `[03]`).”
 
 ---
 
@@ -429,11 +439,13 @@ Manual Keychain UI still needs a human (browser extension).
 
 ## 14. Demo day script (15 minutes)
 
+Use the runnable checklist: [`[11] M1_Demo_Script_15min.md`](./[11]%20M1_Demo_Script_15min.md).
+
 1. Show `/health` + Hive/HAF health (stack up).
 2. Keychain login happy path (11.1) + one edge: cancel popup (KC-2).
 3. WAX `custom_json` mock (11.2) + show log.
 4. HAF account read (11.3) + say out loud: “this is HAF, not the custom listener.”
-5. RC dry-run log (11.4).
+5. RC dry-run log (11.4) → evidence [`[10]`](./[10]%20Phase_E_RC_Stub_Evidence.md).
 6. Show §8 definition of done checkboxes + evidence folder.
 
 If any step fails, use §11.5 to isolate env vs feature before the meeting.

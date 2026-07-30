@@ -112,7 +112,7 @@ async function tick(): Promise<void> {
 
 async function main(): Promise<void> {
   console.log(
-    `[listener] starting (poll=${pollMs}ms). MVP custom stream — Phase 2 migrates to HAF.`,
+    `[listener] starting (poll=${pollMs}ms). Interim escrow sync into hive_records — Milestone 1 acceptance reads use HAF (HAF_DATABASE_URL), not this listener.`,
   );
 
   while (running) {

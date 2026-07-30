@@ -5,7 +5,9 @@ import {
   agentKeyRef,
   buildCustomJsonDemo,
   createChain,
+  createHafReadStore,
   createKmsSigner,
+  isHafConfigured,
 } from "@hive-freelance/hive";
 import { AppError, asyncHandler } from "../lib/errors.js";
 
@@ -57,6 +59,42 @@ healthRouter.get("/api/v1/health/hive", async (_req, res, next) => {
     next(err);
   }
 });
+
+/**
+ * Milestone 1 Phase D — HAF projection health (SQL over HAF_DATABASE_URL).
+ * Not the interim listener / hive_records path.
+ */
+healthRouter.get(
+  "/api/v1/health/haf",
+  asyncHandler(async (_req, res) => {
+    if (!isHafConfigured()) {
+      throw new AppError(
+        503,
+        "HAF_DATABASE_URL is not configured",
+        "HAF_NOT_CONFIGURED",
+      );
+    }
+
+    const store = createHafReadStore();
+    try {
+      const ping = await store.ping();
+      res.json({
+        ok: ping.ok,
+        source: "haf",
+        accountCount: ping.accountCount,
+        operationCount: ping.operationCount,
+      });
+    } catch (err) {
+      throw new AppError(
+        503,
+        err instanceof Error ? err.message : "HAF unavailable",
+        "HAF_UNAVAILABLE",
+      );
+    } finally {
+      await store.close().catch(() => undefined);
+    }
+  }),
+);
 
 /**
  * Milestone 1 Phase C — WAX-built custom_json demo (mock by default).

@@ -80,4 +80,4 @@ Notes: ________
 
 - [x] Working assumption written  
 - [ ] Laure / lead sign-off recorded above  
-- [ ] Phase D unblocked with real `HAF_DATABASE_URL`
+- [x] Phase D landed with local `HAF_DATABASE_URL` → `hive_haf` (see [`[08]`](./[08]%20Phase_D_HAF_Read_Evidence.md)); shared Greateck URL still optional when provided  

@@ -32,4 +32,17 @@ export {
   type CustomJsonDemoResult,
 } from "./waxTx.js";
 
+export {
+  createHafReadStore,
+  isHafConfigured,
+  type HafReadStoreOptions,
+} from "./haf.js";
+
+export type {
+  HafAccount,
+  HafOperation,
+  HafPingResult,
+  HiveReadStore,
+} from "./hiveReadStore.js";
+
 export { APP_ID, ESCROW_OP_TYPES, TRACKED_OP_TYPES } from "./chain.js";

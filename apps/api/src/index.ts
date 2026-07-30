@@ -18,6 +18,7 @@ import { contractsRouter } from "./routes/contracts.js";
 import { milestonesRouter } from "./routes/milestones.js";
 import { paymentsRouter } from "./routes/payments.js";
 import { stubsRouter } from "./routes/stubs.js";
+import { hiveRouter } from "./routes/hive.js";
 
 const rootDir = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
 loadEnv({ path: resolve(rootDir, ".env") });
@@ -39,6 +40,7 @@ app.use(healthRouter);
 const v1 = express.Router();
 v1.use("/auth", authRouter);
 v1.use("/users", usersRouter);
+v1.use("/hive", hiveRouter);
 v1.use("/jobs", jobsRouter);
 v1.use("/jobs/:id/proposals", jobProposalsRouter);
 v1.use("/proposals", proposalsRouter);
