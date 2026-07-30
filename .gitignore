@@ -157,3 +157,6 @@ vite.config.ts.timestamp-*
 .DS_Store
 Thumbs.db
 .idea/
+
+# Local test artifacts (curl cookie jars from manual API testing)
+cookies.txt
