@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { asyncHandler } from "../lib/errors.js";
+import { asyncHandler, AppError } from "../lib/errors.js";
 import { param } from "../lib/params.js";
 import { requireAuth, requireClient } from "../middleware/auth.js";
 import {
@@ -13,15 +13,43 @@ import {
 
 export const jobsRouter = Router();
 
+// Parses an optional positive-number query param (e.g. budget_min/max).
+// Throws a clean 400 on garbage input instead of passing NaN through to
+// Prisma, which would surface as an opaque internal error.
+function positiveNumberQueryParam(
+  value: unknown,
+  name: string,
+): number | undefined {
+  if (value == null) return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new AppError(400, `${name} must be a positive number`);
+  }
+  return n;
+}
+
 jobsRouter.get(
   "/",
   asyncHandler(async (req, res) => {
+    const budget_min = positiveNumberQueryParam(
+      req.query.budget_min,
+      "budget_min",
+    );
+    const budget_max = positiveNumberQueryParam(
+      req.query.budget_max,
+      "budget_max",
+    );
+    if (budget_min != null && budget_max != null && budget_min > budget_max) {
+      throw new AppError(400, "budget_min cannot be greater than budget_max");
+    }
     const data = await listJobs({
       category: req.query.category
         ? String(req.query.category)
         : undefined,
       skill: req.query.skill ? String(req.query.skill) : undefined,
       status: req.query.status ? String(req.query.status) : "open",
+      budget_min,
+      budget_max,
       page: req.query.page ? Number(req.query.page) : 1,
       limit: req.query.limit ? Number(req.query.limit) : 20,
     });

@@ -5,6 +5,8 @@ export async function listJobs(opts: {
   category?: string;
   skill?: string;
   status?: string;
+  budget_min?: number;
+  budget_max?: number;
   page?: number;
   limit?: number;
 }) {
@@ -16,6 +18,12 @@ export async function listJobs(opts: {
   const where: Record<string, unknown> = { status };
   if (opts.category) where.category = opts.category;
   if (opts.skill) where.skillsRequired = { has: opts.skill };
+  if (opts.budget_min != null || opts.budget_max != null) {
+    const budget: Record<string, number> = {};
+    if (opts.budget_min != null) budget.gte = opts.budget_min;
+    if (opts.budget_max != null) budget.lte = opts.budget_max;
+    where.budget = budget;
+  }
 
   const jobs = await prisma.job.findMany({
     where,
