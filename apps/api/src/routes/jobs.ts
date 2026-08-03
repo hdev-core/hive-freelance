@@ -4,6 +4,7 @@ import { asyncHandler, AppError } from "../lib/errors.js";
 import { param } from "../lib/params.js";
 import { requireAuth, requireClient } from "../middleware/auth.js";
 import {
+  cancelJob,
   createJob,
   deleteJob,
   getJob,
@@ -12,6 +13,9 @@ import {
 } from "../services/jobs.js";
 
 export const jobsRouter = Router();
+
+const JOB_STATUSES = ["open", "in_progress", "completed", "cancelled"] as const;
+const jobStatusSchema = z.enum(JOB_STATUSES);
 
 // Parses an optional positive-number query param (e.g. budget_min/max).
 // Throws a clean 400 on garbage input instead of passing NaN through to
@@ -47,7 +51,9 @@ jobsRouter.get(
         ? String(req.query.category)
         : undefined,
       skill: req.query.skill ? String(req.query.skill) : undefined,
-      status: req.query.status ? String(req.query.status) : "open",
+      status: req.query.status
+        ? jobStatusSchema.parse(req.query.status)
+        : "open",
       budget_min,
       budget_max,
       page: req.query.page ? Number(req.query.page) : 1,
@@ -99,6 +105,16 @@ jobsRouter.put(
       })
       .parse(req.body);
     const job = await updateJob(param(req, "id"), req.user!.id, body);
+    res.json(job);
+  }),
+);
+
+jobsRouter.patch(
+  "/:id",
+  requireAuth,
+  requireClient,
+  asyncHandler(async (req, res) => {
+    const job = await cancelJob(param(req, "id"), req.user!.id);
     res.json(job);
   }),
 );

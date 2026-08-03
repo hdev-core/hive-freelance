@@ -91,7 +91,7 @@ Posted by clients. Entry point of the workflow.
 | `budget` | NUMERIC(10,2) | NOT NULL CHECK > 0 | Single budget field for MVP |
 | `category` | TEXT | | Plain text — no lookup table for MVP |
 | `skills_required` | TEXT[] | | Plain text array |
-| `status` | TEXT | NOT NULL DEFAULT 'open' CHECK IN ('open','in_progress','completed') | |
+| `status` | TEXT | NOT NULL DEFAULT 'open' CHECK IN ('open','in_progress','completed','cancelled') | |
 | `created_at` | TIMESTAMP | NOT NULL DEFAULT now() | |
 | `updated_at` | TIMESTAMP | NOT NULL DEFAULT now() | |
 

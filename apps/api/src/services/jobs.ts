@@ -107,6 +107,27 @@ export async function updateJob(
   return toJobRow(updated);
 }
 
+export async function cancelJob(
+  jobId: string,
+  clientId: string,
+): Promise<JobRow> {
+  const job = await getJob(jobId);
+  if (job.client_id !== clientId) {
+    throw new AppError(403, "Not job owner");
+  }
+  if (job.status !== "open" && job.status !== "in_progress") {
+    throw new AppError(
+      400,
+      "Only open or in-progress jobs can be cancelled",
+    );
+  }
+  const updated = await prisma.job.update({
+    where: { id: BigInt(jobId) },
+    data: { status: "cancelled" },
+  });
+  return toJobRow(updated);
+}
+
 export async function deleteJob(
   jobId: string,
   clientId: string,
