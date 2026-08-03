@@ -160,3 +160,4 @@ Thumbs.db
 
 # Local test artifacts (curl cookie jars from manual API testing)
 cookies.txt
+API_PROFILE.md
