@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 
-type SessionUser = { id: string; username: string; role: string };
+/** Matches UserRole from packages/db/src/types.ts / apps/api's JwtPayload. */
+export type UserRole = "client" | "freelancer" | "both";
+
+export type SessionUser = { id: string; username: string; role: UserRole };
 
 /**
  * Checks the real session cookie via GET /api/v1/auth/me (auth.ts) — this

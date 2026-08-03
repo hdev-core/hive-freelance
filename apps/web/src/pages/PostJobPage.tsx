@@ -6,8 +6,6 @@ import { createJob } from "../services/jobsService";
 
 const CATEGORIES = ["Development", "Design", "Writing", "Marketing", "Video & Animation", "Data & AI"];
 
-// TODO(auth/roles): this page should only be reachable by clients once
-// role-based route protection exists — no real gating today, see App.tsx.
 export function PostJobPage() {
   const navigate = useNavigate();
 
