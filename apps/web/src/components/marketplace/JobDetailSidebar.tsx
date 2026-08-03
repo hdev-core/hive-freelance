@@ -40,6 +40,10 @@ export function JobDetailSidebar({ job }: { job: MockJob }) {
 
       <Card>
         <h3 className="mb-4 text-sm font-semibold text-text-primary">About the client</h3>
+        {/* Not a link to the client's real profile page (M2) yet — the mock
+            job data has no Hive username to route to, see jobsService.ts.
+            Wrap this in a Link to /:role/profile/:username once the real
+            Jobs API provides one. */}
         <ClientProfileSummary
           name={job.mock.client.name}
           rating={job.mock.client.rating}

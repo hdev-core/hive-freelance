@@ -71,6 +71,10 @@ export type CreateJobInput = {
  *   (no display_name, no is_verified). `rating`/`review_count` would be an
  *   aggregate over `reviews`, not precomputed anywhere. `total_spent` would
  *   be a SUM over `payments`, also not precomputed. All GUESSES.
+ * - client.username: MISSING ENTIRELY — there's no Hive username on this
+ *   mock, only the fake `client_id`. The real Profile pages (M2) route by
+ *   username (`/client/profile/:username`), so "About the client" can't
+ *   link to the poster's real profile until this object carries one.
  */
 export type MockJobExtras = {
   pricing_type: "fixed" | "hourly";
