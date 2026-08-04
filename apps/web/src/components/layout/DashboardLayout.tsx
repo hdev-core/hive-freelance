@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { cn } from "../../lib/cn";
+import { useSession } from "../../hooks/useSession";
 import { DashboardSidebar } from "./DashboardSidebar";
 import { DashboardTopbar } from "./DashboardTopbar";
-import type { DashboardRole, DashboardUser } from "./types";
+import type { DashboardRole } from "./types";
 
 const COLLAPSE_STORAGE_KEY = "hivework-sidebar-collapsed";
 
@@ -12,27 +13,42 @@ function readInitialCollapsed(): boolean {
   return window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === "1";
 }
 
+/**
+ * `role` is which dashboard tree/URL prefix is rendering (still just
+ * "client" | "freelancer" — a presentation choice, set by the route in
+ * App.tsx). It is NOT the signed-in user's real role — that comes from
+ * useSession() below and can also be "both". Route-level access control
+ * (who's allowed under this tree at all) lives in RequireAuth's `allow`
+ * prop, one level up — this component assumes that check already passed.
+ */
 export function DashboardLayout({
   role,
-  user,
   walletBalance = "0 HBD",
 }: {
   role: DashboardRole;
-  user?: DashboardUser;
   walletBalance?: string;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(readInitialCollapsed);
+  const { user: sessionUser } = useSession();
 
   useEffect(() => {
     window.localStorage.setItem(COLLAPSE_STORAGE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
+
+  // No display-name field on the session payload (that lives on the Profile
+  // row, a separate fetch) — username doubles as both until/unless the
+  // sidebar identity block is worth a dedicated profile fetch.
+  const user = sessionUser
+    ? { name: sessionUser.username, handle: `@${sessionUser.username}` }
+    : undefined;
 
   return (
     <div className="min-h-screen bg-canvas">
       <DashboardSidebar
         role={role}
         user={user}
+        userRole={sessionUser?.role}
         collapsed={collapsed}
         onToggleCollapsed={() => setCollapsed((prev) => !prev)}
         mobileOpen={mobileOpen}

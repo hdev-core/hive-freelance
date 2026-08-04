@@ -1,16 +1,19 @@
 import {
+  ArrowLeftRight,
   Briefcase,
   ChevronLeft,
   ChevronRight,
   FileText,
   LayoutGrid,
   MessageSquare,
+  User,
   Wallet,
   X,
   type LucideIcon,
 } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { cn } from "../../lib/cn";
+import type { UserRole } from "../../hooks/useSession";
 import { IconButton } from "../ui/IconButton";
 import { Logo } from "../ui/Logo";
 import { ProfileMenu } from "./ProfileMenu";
@@ -30,6 +33,7 @@ const navItems: NavItem[] = [
   { to: "proposals", label: "Proposals", icon: FileText },
   { to: "messages", label: "Messages", icon: MessageSquare },
   { to: "escrow", label: "Escrow & Wallet", icon: Wallet },
+  { to: "profile", label: "Profile", icon: User },
 ];
 
 const defaultUser: DashboardUser = {
@@ -83,17 +87,24 @@ function NavRow({
 function SidebarContent({
   role,
   user,
+  userRole,
   collapsed = false,
   onToggleCollapsed,
   onNavigate,
 }: {
   role: DashboardRole;
   user: DashboardUser;
+  userRole?: UserRole;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
   onNavigate?: () => void;
 }) {
   const base = `/${role}`;
+  const otherRole = role === "client" ? "freelancer" : "client";
+  // A "both" user lands on /client by default (dashboardPathForRole) but
+  // isn't restricted to it — RequireAuth's allow list lets them into either
+  // tree. Without this, they'd have no way back to the other one.
+  const showDashboardSwitch = userRole === "both";
 
   return (
     <div className="flex h-full flex-col p-3">
@@ -123,6 +134,21 @@ function SidebarContent({
       )}
       {collapsed && <div className="pt-3" />}
 
+      {showDashboardSwitch && (
+        <Link
+          to={`/${otherRole}/overview`}
+          onClick={onNavigate}
+          title={collapsed ? `Switch to ${otherRole} dashboard` : undefined}
+          className={cn(
+            "mx-1 mb-2 flex items-center gap-2 rounded-lg border border-border px-2 py-1.5 text-[13px] font-medium text-text-secondary transition-shadow duration-150 hover:bg-surface-muted hover:text-text-primary hover:shadow-elevate",
+            collapsed && "justify-center px-0",
+          )}
+        >
+          <ArrowLeftRight size={14} className="shrink-0" />
+          {!collapsed && `Switch to ${otherRole} dashboard`}
+        </Link>
+      )}
+
       <nav className="flex flex-1 flex-col gap-0.5" onClick={onNavigate} aria-label="Dashboard">
         {navItems.map((item) => (
           <NavRow
@@ -145,6 +171,7 @@ function SidebarContent({
 export function DashboardSidebar({
   role,
   user = defaultUser,
+  userRole,
   collapsed = false,
   onToggleCollapsed,
   mobileOpen,
@@ -152,6 +179,7 @@ export function DashboardSidebar({
 }: {
   role: DashboardRole;
   user?: DashboardUser;
+  userRole?: UserRole;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
   mobileOpen: boolean;
@@ -165,7 +193,13 @@ export function DashboardSidebar({
           collapsed ? "w-20" : "w-64",
         )}
       >
-        <SidebarContent role={role} user={user} collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />
+        <SidebarContent
+          role={role}
+          user={user}
+          userRole={userRole}
+          collapsed={collapsed}
+          onToggleCollapsed={onToggleCollapsed}
+        />
       </aside>
 
       {mobileOpen && (
@@ -183,7 +217,7 @@ export function DashboardSidebar({
             >
               <X size={20} />
             </IconButton>
-            <SidebarContent role={role} user={user} onNavigate={onMobileClose} />
+            <SidebarContent role={role} user={user} userRole={userRole} onNavigate={onMobileClose} />
           </div>
         </div>
       )}

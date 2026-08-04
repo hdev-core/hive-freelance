@@ -16,6 +16,7 @@ import {
 import { Navigate, Route, Routes } from "react-router-dom";
 import { PublicLayout } from "./components/layout/PublicLayout";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
+import { RequireAuth } from "./components/layout/RequireAuth";
 import { PlaceholderPage } from "./components/PlaceholderPage";
 import { HomePage } from "./pages/HomePage";
 import { KeychainCheckPage } from "./pages/KeychainCheckPage";
@@ -27,6 +28,8 @@ import { JobsListPage } from "./pages/JobsListPage";
 import { JobDetailPage } from "./pages/JobDetailPage";
 import { PostJobPage } from "./pages/PostJobPage";
 import { ClientJobsPage } from "./pages/ClientJobsPage";
+import { ProfilePage } from "./pages/ProfilePage";
+import { EditProfilePage } from "./pages/EditProfilePage";
 
 type DashboardNavItem = {
   path: string;
@@ -70,7 +73,9 @@ export function App() {
           }
         />
         <Route path="jobs" element={<JobsListPage />} />
-        <Route path="jobs/new" element={<PostJobPage />} />
+        <Route element={<RequireAuth allow={["client", "both"]} />}>
+          <Route path="jobs/new" element={<PostJobPage />} />
+        </Route>
         <Route path="jobs/:id" element={<JobDetailPage />} />
         <Route
           path="jobs/:id/apply"
@@ -135,47 +140,72 @@ export function App() {
 
       <Route path="login" element={<LoginPage />} />
 
-      <Route path="client" element={<DashboardLayout role="client" walletBalance="0 HBD" />}>
-        <Route index element={<Navigate to="/client/overview" replace />} />
-        <Route path="jobs" element={<ClientJobsPage />} />
-        <Route path="jobs/new" element={<PostJobPage />} />
-        <Route path="jobs/:id" element={<JobDetailPage />} />
-        {clientNav
-          .filter((item) => item.path !== "jobs")
-          .map((item) => (
-            <Route
-              key={item.path}
-              path={item.path}
-              element={<PlaceholderPage title={item.title} description={item.description} icon={item.icon} />}
-            />
-          ))}
-        <Route path="*" element={<Navigate to="/client/overview" replace />} />
+      {/*
+        Two guard layers per tree, deliberately not one: the outer one is
+        auth-only (any signed-in role) and gates DashboardLayout itself, so
+        an unauthenticated visitor never sees the dashboard shell. The inner
+        one is role-restricted and wraps only the client-specific pages —
+        Profile sits alongside it, not inside it, because viewing/editing a
+        profile isn't a client-only or freelancer-only action. A "client"
+        user must still be able to open /freelancer/profile/:username to
+        look at a freelancer's profile; it shouldn't 404/redirect just
+        because the tree it lives under is otherwise client-restricted.
+      */}
+      <Route element={<RequireAuth />}>
+        <Route path="client" element={<DashboardLayout role="client" walletBalance="0 HBD" />}>
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="profile/edit" element={<EditProfilePage />} />
+          <Route path="profile/:username" element={<ProfilePage />} />
+          <Route element={<RequireAuth allow={["client", "both"]} />}>
+            <Route index element={<Navigate to="/client/overview" replace />} />
+            <Route path="jobs" element={<ClientJobsPage />} />
+            <Route path="jobs/new" element={<PostJobPage />} />
+            <Route path="jobs/:id" element={<JobDetailPage />} />
+            {clientNav
+              .filter((item) => item.path !== "jobs" && item.path !== "profile")
+              .map((item) => (
+                <Route
+                  key={item.path}
+                  path={item.path}
+                  element={<PlaceholderPage title={item.title} description={item.description} icon={item.icon} />}
+                />
+              ))}
+            <Route path="*" element={<Navigate to="/client/overview" replace />} />
+          </Route>
+        </Route>
       </Route>
 
-      <Route path="freelancer" element={<DashboardLayout role="freelancer" walletBalance="0 HBD" />}>
-        <Route index element={<Navigate to="/freelancer/overview" replace />} />
-        <Route path="jobs" element={<JobsListPage />} />
-        <Route path="jobs/:id" element={<JobDetailPage />} />
-        <Route
-          path="jobs/:id/apply"
-          element={
-            <PlaceholderPage
-              title="Submit a proposal"
-              description="The milestone-based proposal builder lands in a later milestone."
-              icon={Send}
-            />
-          }
-        />
-        {freelancerNav
-          .filter((item) => item.path !== "jobs")
-          .map((item) => (
+      <Route element={<RequireAuth />}>
+        <Route path="freelancer" element={<DashboardLayout role="freelancer" walletBalance="0 HBD" />}>
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="profile/edit" element={<EditProfilePage />} />
+          <Route path="profile/:username" element={<ProfilePage />} />
+          <Route element={<RequireAuth allow={["freelancer", "both"]} />}>
+            <Route index element={<Navigate to="/freelancer/overview" replace />} />
+            <Route path="jobs" element={<JobsListPage />} />
+            <Route path="jobs/:id" element={<JobDetailPage />} />
             <Route
-              key={item.path}
-              path={item.path}
-              element={<PlaceholderPage title={item.title} description={item.description} icon={item.icon} />}
+              path="jobs/:id/apply"
+              element={
+                <PlaceholderPage
+                  title="Submit a proposal"
+                  description="The milestone-based proposal builder lands in a later milestone."
+                  icon={Send}
+                />
+              }
             />
-          ))}
-        <Route path="*" element={<Navigate to="/freelancer/overview" replace />} />
+            {freelancerNav
+              .filter((item) => item.path !== "jobs" && item.path !== "profile")
+              .map((item) => (
+                <Route
+                  key={item.path}
+                  path={item.path}
+                  element={<PlaceholderPage title={item.title} description={item.description} icon={item.icon} />}
+                />
+              ))}
+            <Route path="*" element={<Navigate to="/freelancer/overview" replace />} />
+          </Route>
+        </Route>
       </Route>
     </Routes>
   );

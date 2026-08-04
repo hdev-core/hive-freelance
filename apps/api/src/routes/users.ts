@@ -27,6 +27,15 @@ usersRouter.get(
   }),
 );
 
+usersRouter.get(
+  "/me",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const profile = await getPublicProfile(req.user!.username);
+    res.json(profile);
+  }),
+);
+
 // http/https only — a bare z.string().url() also accepts javascript:/data:
 // URLs, which get rendered as an href on the profile page. Restricting the
 // protocol closes that XSS vector.
@@ -57,11 +66,13 @@ usersRouter.put(
     const body = z
       .object({
         display_name: z.string().min(1).max(100).nullable().optional(),
-        bio: z.string().nullable().optional(),
-        avatar_url: z.string().nullable().optional(),
+        bio: z.string().max(1000).nullable().optional(),
+        // Same http/https-only rule as portfolio links — avatar_url also
+        // ends up as a rendered img src, same XSS vector.
+        avatar_url: httpUrl.nullable().optional(),
         location: z.string().nullable().optional(),
         hourly_rate: z.number().positive().nullable().optional(),
-        skills: z.array(z.string()).nullable().optional(),
+        skills: z.array(z.string().min(1).max(50)).max(20).nullable().optional(),
         // Matches the DB's portfolio_links_shape CHECK constraint (max 10).
         portfolio_links: z
           .array(portfolioLinkSchema)

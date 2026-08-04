@@ -8,24 +8,22 @@ import { Select } from "../components/ui/Select";
 import { ThemeToggle } from "../components/ui/ThemeToggle";
 import { GoogleIcon } from "../components/ui/GoogleIcon";
 import { useToast } from "../components/ui/ToastProvider";
+import { dashboardPathForRole } from "../lib/dashboardPath";
+import type { UserRole } from "../hooks/useSession";
 
 type Role = "client" | "freelancer";
 
 type AuthResponse = {
   ok: boolean;
-  user: { id: string; username: string; role: string; authType?: string };
+  user: { id: string; username: string; role: UserRole; authType?: string };
   provisioned?: boolean;
   warning?: string;
   rc_warning?: string | null;
 };
 
 type Me = {
-  user: { username: string; role: string };
+  user: { username: string; role: UserRole };
 };
-
-function dashboardPathForRole(role: string): string {
-  return role === "freelancer" ? "/freelancer/overview" : "/client/overview";
-}
 
 function googleErrorMessage(code: string): string {
   switch (code) {
