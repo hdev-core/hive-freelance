@@ -101,65 +101,73 @@ export async function rejectProposal(proposalId: string, clientId: string) {
  * thing back automatically, same as the original's catch/ROLLBACK.
  */
 export async function acceptProposal(proposalId: string, clientId: string) {
-  const contract = await prisma.$transaction(async (tx) => {
-    const locked = await tx.$queryRaw<
-      {
-        id: bigint;
-        job_id: bigint;
-        freelancer_id: bigint;
-        bid_amount: Prisma.Decimal;
-        status: string;
-      }[]
-    >`SELECT id, job_id, freelancer_id, bid_amount, status FROM proposals WHERE id = ${BigInt(proposalId)} FOR UPDATE`;
+  const contract = await prisma.$transaction(
+    async (tx) => {
+      const locked = await tx.$queryRaw<
+        {
+          id: bigint;
+          job_id: bigint;
+          freelancer_id: bigint;
+          bid_amount: Prisma.Decimal;
+          status: string;
+        }[]
+      >`SELECT id, job_id, freelancer_id, bid_amount, status FROM proposals WHERE id = ${BigInt(proposalId)} FOR UPDATE`;
 
-    const proposal = locked[0];
-    if (!proposal) throw new AppError(404, "Proposal not found");
+      const proposal = locked[0];
+      if (!proposal) throw new AppError(404, "Proposal not found");
 
-    const job = await tx.job.findUnique({ where: { id: proposal.job_id } });
-    if (!job) throw new AppError(404, "Job not found");
-    if (job.clientId.toString() !== clientId) {
-      throw new AppError(403, "Only the job client can accept");
-    }
-    if (proposal.status !== "pending") {
-      throw new AppError(400, "Proposal is not pending");
-    }
-    if (job.clientId === proposal.freelancer_id) {
-      throw new AppError(
-        403,
-        "Cannot be both client and freelancer on the same contract",
-        "SELF_CONTRACT",
-      );
-    }
+      const job = await tx.job.findUnique({ where: { id: proposal.job_id } });
+      if (!job) throw new AppError(404, "Job not found");
+      if (job.clientId.toString() !== clientId) {
+        throw new AppError(403, "Only the job client can accept");
+      }
+      if (proposal.status !== "pending") {
+        throw new AppError(400, "Proposal is not pending");
+      }
+      if (job.clientId === proposal.freelancer_id) {
+        throw new AppError(
+          403,
+          "Cannot be both client and freelancer on the same contract",
+          "SELF_CONTRACT",
+        );
+      }
 
-    await tx.proposal.update({
-      where: { id: proposal.id },
-      data: { status: "accepted" },
-    });
-    await tx.proposal.updateMany({
-      where: {
-        jobId: proposal.job_id,
-        id: { not: proposal.id },
-        status: "pending",
-      },
-      data: { status: "rejected" },
-    });
-    await tx.job.update({
-      where: { id: proposal.job_id },
-      data: { status: "in_progress" },
-    });
+      await tx.proposal.update({
+        where: { id: proposal.id },
+        data: { status: "accepted" },
+      });
+      await tx.proposal.updateMany({
+        where: {
+          jobId: proposal.job_id,
+          id: { not: proposal.id },
+          status: "pending",
+        },
+        data: { status: "rejected" },
+      });
+      await tx.job.update({
+        where: { id: proposal.job_id },
+        data: { status: "in_progress" },
+      });
 
-    return tx.contract.create({
-      data: {
-        jobId: proposal.job_id,
-        proposalId: proposal.id,
-        clientId: job.clientId,
-        freelancerId: proposal.freelancer_id,
-        totalAmount: proposal.bid_amount,
-        status: "active",
-        startDate: new Date(),
-      },
-    });
-  });
+      return tx.contract.create({
+        data: {
+          jobId: proposal.job_id,
+          proposalId: proposal.id,
+          clientId: job.clientId,
+          freelancerId: proposal.freelancer_id,
+          totalAmount: proposal.bid_amount,
+          status: "active",
+          startDate: new Date(),
+        },
+      });
+    },
+    // Default is 5000ms — observed real-world latency through the pooled
+    // connection came in at ~5.5s for this transaction's six round-trips,
+    // tripping the default and closing the transaction before the final
+    // statement ran. Six small statements shouldn't need 15s of DB work;
+    // this headroom is for connection/pooler latency, not query cost.
+    { timeout: 15000 },
+  );
 
   const custom_json = {
     id: APP_ID,
