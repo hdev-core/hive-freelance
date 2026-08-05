@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useOutletContext, useParams } from "react-router-dom";
 import { Card } from "../components/ui";
 import {
   ProfileAboutCard,
@@ -8,6 +8,7 @@ import {
   ProfilePortfolioCard,
   ProfileSkillsCard,
 } from "../components/profile";
+import type { DashboardRole } from "../components/layout/types";
 import { getMyProfile, getProfileByUsername, type ProfileResponse } from "../services/profileService";
 import { useSession } from "../hooks/useSession";
 
@@ -32,6 +33,7 @@ function ProfileSkeleton() {
  */
 export function ProfilePage() {
   const { username } = useParams<{ username?: string }>();
+  const role = useOutletContext<DashboardRole>();
   const { user: sessionUser } = useSession();
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,7 +80,7 @@ export function ProfilePage() {
 
       {!loading && !error && profile && (
         <div className="flex flex-col gap-6">
-          <ProfileHeaderCard profile={profile} isOwnProfile={isOwnProfile} />
+          <ProfileHeaderCard profile={profile} isOwnProfile={isOwnProfile} role={role} />
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_22.5rem]">
             <div className="flex flex-col gap-6">
               <ProfileAboutCard bio={profile.profile?.bio ?? null} />

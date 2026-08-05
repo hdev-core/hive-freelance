@@ -57,7 +57,11 @@ export function DashboardLayout({
       <div className={cn("transition-[padding] duration-200", collapsed ? "lg:pl-20" : "lg:pl-64")}>
         <DashboardTopbar onMenuClick={() => setMobileOpen(true)} walletBalance={walletBalance} />
         <main className="mx-auto w-full max-w-canvas px-4 py-6 sm:px-6 lg:px-8">
-          <Outlet />
+          {/* Which tree is rendering — the same value DashboardSidebar uses
+              to build its own links. Routed children (e.g. ProfilePage) that
+              need to build an absolute /:role/... link read it via
+              useOutletContext() instead of re-deriving it from the URL. */}
+          <Outlet context={role} />
         </main>
       </div>
     </div>
