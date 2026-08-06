@@ -20,6 +20,7 @@ import { RequireAuth } from "./components/layout/RequireAuth";
 import { PlaceholderPage } from "./components/PlaceholderPage";
 import { HomePage } from "./pages/HomePage";
 import { KeychainCheckPage } from "./pages/KeychainCheckPage";
+import { AcceptProposalTestPage } from "./pages/AcceptProposalTestPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ClaimAccountPage } from "./pages/ClaimAccountPage";
 import { ContractPage } from "./pages/ContractPage";
@@ -129,6 +130,10 @@ export function App() {
         />
         <Route path="claim" element={<ClaimAccountPage />} />
         <Route path="keychain" element={<KeychainCheckPage />} />
+        <Route
+          path="dev/accept-proposal"
+          element={<AcceptProposalTestPage />}
+        />
         <Route path="contracts" element={<ContractsPage />} />
         <Route path="contracts/:id" element={<ContractPage />} />
         <Route path="dev/health" element={<HomePage />} />

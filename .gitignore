@@ -159,5 +159,5 @@ Thumbs.db
 .idea/
 
 # Local test artifacts (curl cookie jars from manual API testing)
-cookies.txt
+*cookies.txt
 API_PROFILE.md
