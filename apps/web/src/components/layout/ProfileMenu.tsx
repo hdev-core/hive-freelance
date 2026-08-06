@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LogOut, Settings, User } from "lucide-react";
+import { ChevronUp, LogOut, Settings, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "../../lib/cn";
 import { Avatar } from "../ui/Avatar";
@@ -69,12 +69,21 @@ export function ProfileMenu({
       >
         <Avatar name={user.name} size="sm" />
         {!collapsed && (
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] font-semibold text-text-primary">
-              {user.name}
+          <>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-semibold text-text-primary">
+                {user.name}
+              </span>
+              <span className="block truncate text-xs text-text-secondary">{user.handle}</span>
             </span>
-            <span className="block truncate text-xs text-text-secondary">{user.handle}</span>
-          </span>
+            {/* Menu opens upward (bottom-full below) — chevron points up
+                when closed (hinting content above) and flips to point back
+                down at the trigger once open. */}
+            <ChevronUp
+              size={14}
+              className={cn("shrink-0 text-text-muted transition-transform duration-150", open && "rotate-180")}
+            />
+          </>
         )}
       </button>
 

@@ -61,7 +61,7 @@ export function JobListCard({ job }: { job: JobListItem }) {
               {job.proposalCount} proposal{job.proposalCount === 1 ? "" : "s"}
             </span>
           </div>
-          <div className="text-base font-bold text-text-primary">{formatBudget(job.budget)}</div>
+          <div className="text-base font-bold text-success-text">{formatBudget(job.budget)}</div>
         </div>
       </Link>
     </Card>

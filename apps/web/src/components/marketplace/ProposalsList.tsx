@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { FileText } from "lucide-react";
 import { Badge, Card } from "../ui";
 import { listProposalsForJob, type ProposalRow, type ProposalStatus } from "../../services/proposalsService";
@@ -57,7 +58,10 @@ export function ProposalsList({ jobId }: { jobId: string }) {
           <FileText size={16} />
         </span>
         <div>
-          <h2 className="text-base font-semibold text-text-primary">Proposals ({proposals.length})</h2>
+          <h2 className="flex items-baseline gap-1.5 text-base font-semibold text-text-primary">
+            Proposals
+            <span className="text-sm font-normal text-text-muted">{proposals.length}</span>
+          </h2>
           <p className="text-xs text-text-secondary">Compare freelancer bids, timelines, and milestone breakdowns.</p>
         </div>
       </div>
@@ -65,23 +69,33 @@ export function ProposalsList({ jobId }: { jobId: string }) {
       {proposals.length === 0 ? (
         <p className="text-sm text-text-secondary">No proposals yet.</p>
       ) : (
-        <div className="flex flex-col gap-4">
-          {proposals.map((proposal) => (
-            <ProposalCard key={proposal.id} proposal={proposal} />
-          ))}
+        <div className="flex flex-col gap-3">
+          {/* Most recent only — a preview, not the full comparison list.
+              listProposalsForJob already orders by createdAt desc, so
+              proposals[0] is the latest. */}
+          <ProposalCard proposal={proposals[0]} />
+          {proposals.length > 1 && (
+            <Link
+              to={`/client/jobs/${jobId}/proposals`}
+              className="text-xs font-medium text-accent hover:underline"
+            >
+              View all {proposals.length} proposals &rarr;
+            </Link>
+          )}
         </div>
       )}
     </Card>
   );
 }
 
-const statusVariant: Record<ProposalStatus, "neutral" | "success" | "accent"> = {
+/** Shared with JobProposalsPage — the fuller client-facing proposals view. */
+export const proposalStatusVariant: Record<ProposalStatus, "neutral" | "success" | "accent"> = {
   pending: "neutral",
   accepted: "success",
   rejected: "accent",
 };
 
-const statusLabel: Record<ProposalStatus, string> = {
+export const proposalStatusLabel: Record<ProposalStatus, string> = {
   pending: "Pending",
   accepted: "Accepted",
   rejected: "Rejected",
@@ -96,8 +110,8 @@ function ProposalCard({ proposal }: { proposal: ProposalRow }) {
           <p className="text-xs text-text-muted">{formatRelativeTime(new Date(proposal.created_at))}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant={statusVariant[proposal.status]}>{statusLabel[proposal.status]}</Badge>
-          <span className="text-base font-bold text-text-primary">
+          <Badge variant={proposalStatusVariant[proposal.status]}>{proposalStatusLabel[proposal.status]}</Badge>
+          <span className="text-base font-bold text-success-text">
             {Number(proposal.bid_amount).toLocaleString("en-US", { maximumFractionDigits: 2 })} HBD
           </span>
         </div>
@@ -127,7 +141,7 @@ function ProposalCard({ proposal }: { proposal: ProposalRow }) {
               <span className="text-text-secondary">
                 {m.title} <span className="text-text-muted">— {m.duration} (proposed duration)</span>
               </span>
-              <span className="font-medium text-text-primary">
+              <span className="font-medium text-success-text">
                 {Number(m.amount).toLocaleString("en-US", { maximumFractionDigits: 2 })} HBD
               </span>
             </div>

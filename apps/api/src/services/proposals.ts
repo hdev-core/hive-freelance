@@ -5,6 +5,7 @@ import {
   toContractRow,
   toProposalRow,
   toProposalMilestoneRow,
+  toMilestoneRow,
   type Prisma,
 } from "@hive-freelance/db";
 import { AppError } from "../lib/errors.js";
@@ -19,12 +20,84 @@ export async function listProposalsForJob(jobId: string, clientId: string) {
   }
   const proposals = await prisma.proposal.findMany({
     where: { jobId: BigInt(jobId) },
-    include: { milestones: milestonesOrder },
+    include: {
+      milestones: milestonesOrder,
+      freelancer: {
+        select: {
+          hiveUsername: true,
+          profile: { select: { displayName: true, avatarUrl: true, skills: true } },
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
+
+  // Batched rating aggregate, same pattern as listJobs's client_rating: one
+  // groupBy for every freelancer on this job instead of one query per card.
+  const freelancerIds = [...new Set(proposals.map((p) => p.freelancerId))];
+  const ratings = freelancerIds.length
+    ? await prisma.review.groupBy({
+        by: ["revieweeId"],
+        where: { revieweeId: { in: freelancerIds } },
+        _avg: { rating: true },
+        _count: { rating: true },
+      })
+    : [];
+  const ratingByFreelancerId = new Map(
+    ratings.map((r) => [r.revieweeId.toString(), { average: r._avg.rating, count: r._count.rating }]),
+  );
+
+  return proposals.map((p) => {
+    const rating = ratingByFreelancerId.get(p.freelancerId.toString()) ?? { average: null, count: 0 };
+    return {
+      ...toProposalRow(p),
+      milestones: p.milestones.map(toProposalMilestoneRow),
+      freelancer_username: p.freelancer.hiveUsername,
+      freelancer_display_name: p.freelancer.profile?.displayName ?? null,
+      freelancer_avatar_url: p.freelancer.profile?.avatarUrl ?? null,
+      // Real Profile.skills, first entry only — there is no headline/title
+      // field on Profile, so a single skill tag stands in for the
+      // freelancer's "role" line instead of inventing one.
+      freelancer_top_skill: p.freelancer.profile?.skills?.[0] ?? null,
+      freelancer_rating: {
+        average: rating.average != null ? Math.round(rating.average * 100) / 100 : null,
+        count: rating.count,
+      },
+    };
+  });
+}
+
+/**
+ * The freelancer's own proposals across every job, every status — unlike
+ * getDashboard's pendingProposals (pending-only, capped at 50, built for the
+ * dashboard overview widget), this is a full listing for the "My Proposals"
+ * page. Always scoped to the caller; there's no cross-user case.
+ */
+export async function listMyProposals(freelancerId: string) {
+  const proposals = await prisma.proposal.findMany({
+    where: { freelancerId: BigInt(freelancerId) },
+    include: {
+      job: { select: { title: true, status: true } },
+      milestones: milestonesOrder,
+      // Only present once a proposal has been accepted and promoted into a
+      // Contract — null for pending/rejected proposals. contract_milestones
+      // uses the real, 5-state Milestone model (pending/funded/submitted/
+      // approved/released), not the proposal-stage ProposalMilestone rows,
+      // which have no status at all.
+      contract: {
+        include: { milestones: { orderBy: { milestoneOrder: "asc" as const } } },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+
   return proposals.map((p) => ({
     ...toProposalRow(p),
+    job_title: p.job.title,
+    job_status: p.job.status,
     milestones: p.milestones.map(toProposalMilestoneRow),
+    contract_milestones: p.contract ? p.contract.milestones.map(toMilestoneRow) : null,
   }));
 }
 

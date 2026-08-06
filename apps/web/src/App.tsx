@@ -26,7 +26,9 @@ import { ContractPage } from "./pages/ContractPage";
 import { ContractsPage } from "./pages/ContractsPage";
 import { JobsListPage } from "./pages/JobsListPage";
 import { JobDetailPage } from "./pages/JobDetailPage";
+import { JobProposalsPage } from "./pages/JobProposalsPage";
 import { SubmitProposalPage } from "./pages/SubmitProposalPage";
+import { MyProposalsPage } from "./pages/MyProposalsPage";
 import { PostJobPage } from "./pages/PostJobPage";
 import { ClientJobsPage } from "./pages/ClientJobsPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -41,8 +43,7 @@ type DashboardNavItem = {
 
 const clientNav: DashboardNavItem[] = [
   { path: "overview", title: "Overview", icon: LayoutGrid, description: "Snapshot of active jobs, escrow balances, and received proposals." },
-  { path: "jobs", title: "Jobs", icon: Briefcase, description: "Create and manage the jobs you've posted." },
-  { path: "proposals", title: "Proposals", icon: FileText, description: "Review proposals submitted by freelancers." },
+  { path: "jobs", title: "Jobs & Proposals", icon: Briefcase, description: "Create and manage the jobs you've posted." },
   { path: "messages", title: "Messages", icon: MessageSquare, description: "Chat with freelancers about active and prospective work." },
   { path: "escrow", title: "Escrow & Wallet", icon: Wallet, description: "Track locked escrow funds and your Hive wallet balance." },
   { path: "settings", title: "Settings", icon: Settings, description: "Manage your account and workspace preferences." },
@@ -165,6 +166,7 @@ export function App() {
             <Route path="jobs" element={<ClientJobsPage />} />
             <Route path="jobs/new" element={<PostJobPage />} />
             <Route path="jobs/:id" element={<JobDetailPage />} />
+            <Route path="jobs/:id/proposals" element={<JobProposalsPage />} />
             {clientNav
               .filter((item) => item.path !== "jobs" && item.path !== "profile")
               .map((item) => (
@@ -189,8 +191,9 @@ export function App() {
             <Route path="jobs" element={<JobsListPage />} />
             <Route path="jobs/:id" element={<JobDetailPage />} />
             <Route path="jobs/:id/apply" element={<SubmitProposalPage />} />
+            <Route path="proposals" element={<MyProposalsPage />} />
             {freelancerNav
-              .filter((item) => item.path !== "jobs" && item.path !== "profile")
+              .filter((item) => item.path !== "jobs" && item.path !== "profile" && item.path !== "proposals")
               .map((item) => (
                 <Route
                   key={item.path}

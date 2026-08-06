@@ -1,4 +1,4 @@
-import { Star } from "lucide-react";
+import { Calendar, MapPin, Star } from "lucide-react";
 import { Avatar } from "../ui/Avatar";
 
 export type ClientProfileSummaryProps = {
@@ -34,11 +34,17 @@ export function ClientProfileSummary({
       </div>
       <dl className="flex flex-col gap-2 text-sm">
         <div className="flex items-center justify-between">
-          <dt className="text-text-secondary">Location</dt>
+          <dt className="flex items-center gap-1.5 text-text-secondary">
+            <MapPin size={14} className="shrink-0" />
+            Location
+          </dt>
           <dd className="font-medium text-text-primary">{location}</dd>
         </div>
         <div className="flex items-center justify-between">
-          <dt className="text-text-secondary">Member since</dt>
+          <dt className="flex items-center gap-1.5 text-text-secondary">
+            <Calendar size={14} className="shrink-0" />
+            Member since
+          </dt>
           <dd className="font-medium text-text-primary">{memberSince}</dd>
         </div>
       </dl>

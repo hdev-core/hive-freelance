@@ -10,6 +10,7 @@ import {
 import {
   acceptProposal,
   confirmAccept,
+  listMyProposals,
   listProposalsForJob,
   rejectProposal,
   submitProposal,
@@ -20,6 +21,17 @@ export const proposalsRouter = Router();
 
 /** Nested under /jobs/:id/proposals — mount separately */
 export const jobProposalsRouter = Router({ mergeParams: true });
+
+/** The caller's own proposals across every job/status — backs "My Proposals". */
+proposalsRouter.get(
+  "/",
+  requireAuth,
+  requireFreelancer,
+  asyncHandler(async (req, res) => {
+    const rows = await listMyProposals(req.user!.id);
+    res.json({ items: rows });
+  }),
+);
 
 jobProposalsRouter.get(
   "/",

@@ -1,12 +1,52 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { CheckCircle2 } from "lucide-react";
+import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { LinkButton } from "../ui/LinkButton";
 import { ClientProfileSummary, type ClientProfileSummaryProps } from "./ClientProfileSummary";
 import type { JobDetailResponse } from "../../services/jobDetailService";
 import { getProfileByUsername } from "../../services/profileService";
+import { listMyProposals } from "../../services/proposalsService";
 import { formatBudget } from "../../lib/formatBudget";
 import { useSession } from "../../hooks/useSession";
+
+/**
+ * Whether the signed-in freelancer already has a proposal on this job —
+ * any status, since the backend enforces one proposal per (job, freelancer)
+ * pair at the DB level (unique constraint; a rejected proposal's row still
+ * occupies that slot, so resubmitting genuinely isn't possible, not just
+ * discouraged). Reuses the real "my proposals" listing rather than adding a
+ * new endpoint — GET /proposals already returns every proposal the caller
+ * has ever submitted, job_id included.
+ */
+function useAlreadyApplied(jobId: string, enabled: boolean): boolean {
+  const [applied, setApplied] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) {
+      setApplied(false);
+      return;
+    }
+    let cancelled = false;
+    listMyProposals()
+      .then((res) => {
+        if (!cancelled) setApplied(res.items.some((p) => p.job_id === jobId));
+      })
+      .catch(() => {
+        // A freelancer with zero proposals yet, or a transient fetch
+        // failure, should fall back to showing "Apply Now" — the real
+        // submit endpoint still enforces the one-proposal-per-job rule
+        // server-side either way, so this is a UX nicety, not the guard.
+        if (!cancelled) setApplied(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId, enabled]);
+
+  return applied;
+}
 
 function formatMemberSince(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", year: "numeric" });
@@ -50,6 +90,8 @@ export function JobDetailSidebar({ job }: { job: JobDetailResponse }) {
   const { loading: sessionLoading, user } = useSession();
   const isLoggedIn = !sessionLoading && !!user;
   const isOwnJob = !!user && user.id === job.client_id;
+  const isFreelancerRole = user?.role === "freelancer" || user?.role === "both";
+  const alreadyApplied = useAlreadyApplied(job.id, isLoggedIn && !isOwnJob && isFreelancerRole);
   const clientProfile = useClientProfile(job.client_username);
 
   return (
@@ -57,12 +99,27 @@ export function JobDetailSidebar({ job }: { job: JobDetailResponse }) {
       <Card className="flex flex-col gap-4">
         <div>
           <p className="text-sm text-text-secondary">Budget</p>
-          <p className="mt-1 text-3xl font-bold text-text-primary">{formatBudget(job.budget)}</p>
+          <p className="mt-1 text-3xl font-bold text-success-text">{formatBudget(job.budget)}</p>
         </div>
         {isOwnJob ? (
           <p className="rounded-lg bg-surface-muted p-3 text-xs text-text-secondary">
             This is your job posting. Freelancers can apply once it's open for proposals.
           </p>
+        ) : alreadyApplied ? (
+          <>
+            <Button disabled variant="secondary" className="w-full">
+              <CheckCircle2 size={16} />
+              Application Sent
+            </Button>
+            <LinkButton
+              to={isLoggedIn ? "../../messages" : "/login"}
+              relative={isLoggedIn ? "path" : undefined}
+              variant="secondary"
+              className="w-full"
+            >
+              Message Client
+            </LinkButton>
+          </>
         ) : (
           <>
             <LinkButton to={isLoggedIn ? "apply" : "/login"} className="w-full">

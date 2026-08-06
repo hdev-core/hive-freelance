@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Clock, Globe, ShieldCheck } from "lucide-react";
+import { AlignLeft, ArrowLeft, CheckCircle2, Clock, Globe, ShieldCheck, Tag, Users, Wallet } from "lucide-react";
 import { Card, Badge } from "../components/ui";
 import { SkillTag, JobDetailSidebar, ProposalsList, StatusBadge } from "../components/marketplace";
 import { getJob } from "../services/jobDetailService";
@@ -87,22 +87,34 @@ export function JobDetailPage() {
 
               <div className="grid grid-cols-2 gap-4 border-y border-border py-4 text-sm">
                 <div>
-                  <p className="text-text-secondary">Budget</p>
-                  <p className="mt-1 font-bold text-text-primary">{formatBudget(job.budget)}</p>
+                  <p className="flex items-center gap-1.5 text-text-secondary">
+                    <Wallet size={14} className="shrink-0" />
+                    Budget
+                  </p>
+                  <p className="mt-1 font-bold text-success-text">{formatBudget(job.budget)}</p>
                 </div>
                 <div>
-                  <p className="text-text-secondary">Proposals</p>
+                  <p className="flex items-center gap-1.5 text-text-secondary">
+                    <Users size={14} className="shrink-0" />
+                    Proposals
+                  </p>
                   <p className="mt-1 font-bold text-text-primary">{job.proposalCount}</p>
                 </div>
               </div>
 
               <div>
-                <h2 className="mb-2 text-base font-semibold text-text-primary">Project description</h2>
+                <h2 className="mb-2 flex items-center gap-1.5 text-base font-semibold text-text-primary">
+                  <AlignLeft size={16} className="shrink-0 text-text-secondary" />
+                  Project description
+                </h2>
                 <p className="whitespace-pre-line text-sm leading-relaxed text-text-secondary">{job.description}</p>
               </div>
 
               <div>
-                <h2 className="mb-2 text-base font-semibold text-text-primary">Skills required</h2>
+                <h2 className="mb-2 flex items-center gap-1.5 text-base font-semibold text-text-primary">
+                  <Tag size={16} className="shrink-0 text-text-secondary" />
+                  Skills required
+                </h2>
                 <div className="flex flex-wrap gap-2">
                   {(job.skills_required ?? []).map((skill) => (
                     <SkillTag key={skill} skill={skill} />

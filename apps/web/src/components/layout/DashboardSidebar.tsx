@@ -6,7 +6,6 @@ import {
   FileText,
   LayoutGrid,
   MessageSquare,
-  User,
   Wallet,
   X,
   type LucideIcon,
@@ -27,13 +26,31 @@ type NavItem = {
   icon: LucideIcon;
 };
 
-const navItems: NavItem[] = [
+/**
+ * Client's own posted jobs page already surfaces proposals per-job (via
+ * each job card's "View proposals" button), so there's no separate
+ * standalone client "Proposals" destination to link to — folded into one
+ * "Jobs & Proposals" entry instead of pointing at a bare placeholder.
+ * Freelancer keeps them separate: "Jobs" (browse) and "Proposals" (their
+ * own submitted proposals, MyProposalsPage) are genuinely different pages.
+ */
+// No "Profile" entry in either list — it's reachable from the ProfileMenu
+// at the bottom of the sidebar (click the user name → Profile/Settings/
+// Log out), so a second top-level link to the same destination was
+// redundant.
+const clientNavItems: NavItem[] = [
+  { to: "overview", label: "Overview", icon: LayoutGrid },
+  { to: "jobs", label: "Jobs & Proposals", icon: Briefcase },
+  { to: "messages", label: "Messages", icon: MessageSquare },
+  { to: "escrow", label: "Escrow & Wallet", icon: Wallet },
+];
+
+const freelancerNavItems: NavItem[] = [
   { to: "overview", label: "Overview", icon: LayoutGrid },
   { to: "jobs", label: "Jobs", icon: Briefcase },
   { to: "proposals", label: "Proposals", icon: FileText },
   { to: "messages", label: "Messages", icon: MessageSquare },
   { to: "escrow", label: "Escrow & Wallet", icon: Wallet },
-  { to: "profile", label: "Profile", icon: User },
 ];
 
 const defaultUser: DashboardUser = {
@@ -101,6 +118,7 @@ function SidebarContent({
 }) {
   const base = `/${role}`;
   const otherRole = role === "client" ? "freelancer" : "client";
+  const navItems = role === "client" ? clientNavItems : freelancerNavItems;
   // A "both" user lands on /client by default (dashboardPathForRole) but
   // isn't restricted to it — RequireAuth's allow list lets them into either
   // tree. Without this, they'd have no way back to the other one.

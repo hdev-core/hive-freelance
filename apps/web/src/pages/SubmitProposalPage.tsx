@@ -233,7 +233,7 @@ export function SubmitProposalPage() {
               created.
             </p>
 
-            <div className="flex items-center justify-between rounded-lg bg-accent-subtle px-4 py-3 text-sm font-semibold text-accent">
+            <div className="flex items-center justify-between rounded-lg bg-success-bg px-4 py-3 text-sm font-semibold text-success-text">
               <span>Total bid</span>
               <span>{bidAmount.toLocaleString("en-US", { maximumFractionDigits: 2 })} HBD</span>
             </div>
@@ -290,12 +290,12 @@ export function SubmitProposalPage() {
               {job && (
                 <div className="flex justify-between text-text-secondary">
                   <span>Client budget</span>
-                  <span className="font-medium text-text-primary">{formatBudget(job.budget)}</span>
+                  <span className="font-medium text-success-text">{formatBudget(job.budget)}</span>
                 </div>
               )}
               <div className="flex justify-between text-text-secondary">
                 <span>Your bid</span>
-                <span className="font-medium text-text-primary">
+                <span className="font-medium text-success-text">
                   {bidAmount.toLocaleString("en-US", { maximumFractionDigits: 2 })} HBD
                 </span>
               </div>

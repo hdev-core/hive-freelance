@@ -8,6 +8,7 @@ export { Card, type CardProps } from "./Card";
 export { PageHeader, type PageHeaderProps } from "./PageHeader";
 export { Badge, type BadgeProps, type BadgeVariant } from "./Badge";
 export { Tag, type TagProps } from "./Tag";
+export { Tabs, type TabItem } from "./Tabs";
 export { Avatar, type AvatarProps } from "./Avatar";
 export { Logo, type LogoSize } from "./Logo";
 export { GoogleIcon } from "./GoogleIcon";
