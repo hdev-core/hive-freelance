@@ -1,4 +1,5 @@
 export { StatusBadge, type StatusBadgeStatus } from "./StatusBadge";
+export { ProposalsList } from "./ProposalsList";
 export { SkillTag } from "./SkillTag";
 export { JobCard } from "./JobCard";
 export { JobDetailSidebar } from "./JobDetailSidebar";

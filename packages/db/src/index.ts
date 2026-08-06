@@ -41,6 +41,7 @@ export type {
   PaymentStatus,
   PortfolioLink,
   ProfileRow,
+  ProposalMilestoneRow,
   ProposalRow,
   ProposalStatus,
   ResolutionDirection,
@@ -213,11 +214,13 @@ export function toProfileRow(p: PrismaProfile): ProfileRow {
 import type {
   Job as PrismaJob,
   Proposal as PrismaProposal,
+  ProposalMilestone as PrismaProposalMilestone,
   Contract as PrismaContract,
   Payment as PrismaPayment,
 } from "@prisma/client";
 import type {
   JobRow,
+  ProposalMilestoneRow,
   ProposalRow,
   ContractRow,
   PaymentRow,
@@ -247,8 +250,26 @@ export function toProposalRow(p: PrismaProposal): ProposalRow {
     bid_amount: p.bidAmount.toString(),
     status: p.status as ProposalRow["status"],
     hive_tx_id: p.hiveTxId,
+    estimated_duration: p.estimatedDuration,
+    available_to_start: p.availableToStart,
+    portfolio_links: Array.isArray(p.portfolioLinks)
+      ? (p.portfolioLinks as PortfolioLink[])
+      : null,
     created_at: p.createdAt,
     updated_at: p.updatedAt,
+  };
+}
+
+export function toProposalMilestoneRow(
+  m: PrismaProposalMilestone,
+): ProposalMilestoneRow {
+  return {
+    id: m.id.toString(),
+    proposal_id: m.proposalId.toString(),
+    title: m.title,
+    amount: m.amount.toString(),
+    duration: m.duration,
+    milestone_order: m.milestoneOrder,
   };
 }
 

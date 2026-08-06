@@ -74,8 +74,24 @@ export type ProposalRow = {
   bid_amount: string;
   status: ProposalStatus;
   hive_tx_id: string | null;
+  // Proposal-stage-only — not enforced/tracked once a contract exists.
+  estimated_duration: string | null;
+  available_to_start: string | null;
+  portfolio_links: PortfolioLink[] | null;
   created_at: Date;
   updated_at: Date;
+};
+
+/** Proposal-stage milestone breakdown. `duration` is indicative only — see
+ * ProposalMilestone model comment in schema.prisma for why it isn't carried
+ * forward into the real Milestone table at accept time. */
+export type ProposalMilestoneRow = {
+  id: string;
+  proposal_id: string;
+  title: string;
+  amount: string;
+  duration: string;
+  milestone_order: number;
 };
 
 export type ContractRow = {

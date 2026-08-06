@@ -4,10 +4,13 @@ import {
   isUniqueViolation,
   toContractRow,
   toProposalRow,
+  toProposalMilestoneRow,
   type Prisma,
 } from "@hive-freelance/db";
 import { AppError } from "../lib/errors.js";
 import { getJob } from "./jobs.js";
+
+const milestonesOrder = { orderBy: { milestoneOrder: "asc" as const } };
 
 export async function listProposalsForJob(jobId: string, clientId: string) {
   const job = await getJob(jobId);
@@ -16,15 +19,32 @@ export async function listProposalsForJob(jobId: string, clientId: string) {
   }
   const proposals = await prisma.proposal.findMany({
     where: { jobId: BigInt(jobId) },
+    include: { milestones: milestonesOrder },
     orderBy: { createdAt: "desc" },
   });
-  return proposals.map(toProposalRow);
+  return proposals.map((p) => ({
+    ...toProposalRow(p),
+    milestones: p.milestones.map(toProposalMilestoneRow),
+  }));
 }
+
+export type SubmitProposalMilestoneInput = {
+  title: string;
+  amount: number;
+  duration: string;
+};
 
 export async function submitProposal(
   jobId: string,
   freelancerId: string,
-  data: { cover_letter: string; bid_amount: number },
+  data: {
+    cover_letter: string;
+    bid_amount: number;
+    estimated_duration?: string | null;
+    available_to_start?: string | null;
+    portfolio_links?: { title: string; url: string }[] | null;
+    milestones: SubmitProposalMilestoneInput[];
+  },
 ) {
   const job = await getJob(jobId);
   if (job.status !== "open") {
@@ -34,6 +54,18 @@ export async function submitProposal(
     throw new AppError(403, "Cannot propose on your own job");
   }
 
+  // Milestone amounts are the bid's breakdown — they must add up to exactly
+  // what the client sees as the total bid, same rule the mockup's sidebar
+  // total enforces client-side.
+  const milestoneTotal = data.milestones.reduce((sum, m) => sum + m.amount, 0);
+  if (Math.round(milestoneTotal * 100) !== Math.round(data.bid_amount * 100)) {
+    throw new AppError(
+      400,
+      "Milestone amounts must sum to the bid amount",
+      "MILESTONE_SUM_MISMATCH",
+    );
+  }
+
   try {
     const proposal = await prisma.proposal.create({
       data: {
@@ -41,9 +73,24 @@ export async function submitProposal(
         freelancerId: BigInt(freelancerId),
         coverLetter: data.cover_letter,
         bidAmount: data.bid_amount,
+        estimatedDuration: data.estimated_duration ?? null,
+        availableToStart: data.available_to_start ?? null,
+        portfolioLinks: data.portfolio_links ?? undefined,
+        milestones: {
+          create: data.milestones.map((m, i) => ({
+            title: m.title,
+            amount: m.amount,
+            duration: m.duration,
+            milestoneOrder: i,
+          })),
+        },
       },
+      include: { milestones: milestonesOrder },
     });
-    return toProposalRow(proposal);
+    return {
+      ...toProposalRow(proposal),
+      milestones: proposal.milestones.map(toProposalMilestoneRow),
+    };
   } catch (err) {
     if (isUniqueViolation(err)) {
       throw new AppError(409, "Already proposed on this job");
@@ -116,6 +163,15 @@ export async function acceptProposal(proposalId: string, clientId: string) {
       const proposal = locked[0];
       if (!proposal) throw new AppError(404, "Proposal not found");
 
+      // Not part of the FOR UPDATE lock above: proposal milestones are
+      // written once at submitProposal and never mutated afterward (no
+      // edit-proposal endpoint exists), so there's nothing concurrent to
+      // guard against here — a plain typed read is enough.
+      const proposalMilestones = await tx.proposalMilestone.findMany({
+        where: { proposalId: proposal.id },
+        orderBy: { milestoneOrder: "asc" },
+      });
+
       const job = await tx.job.findUnique({ where: { id: proposal.job_id } });
       if (!job) throw new AppError(404, "Job not found");
       if (job.clientId.toString() !== clientId) {
@@ -149,7 +205,7 @@ export async function acceptProposal(proposalId: string, clientId: string) {
         data: { status: "in_progress" },
       });
 
-      return tx.contract.create({
+      const contract = await tx.contract.create({
         data: {
           jobId: proposal.job_id,
           proposalId: proposal.id,
@@ -160,12 +216,37 @@ export async function acceptProposal(proposalId: string, clientId: string) {
           startDate: new Date(),
         },
       });
+
+      // Promote proposal-stage milestones into real, trackable rows on the
+      // new contract. Only title/amount/order carry over — `duration` is
+      // deliberately dropped: it's proposal-stage-only, non-binding
+      // information, and the real Milestone table has no field for it (see
+      // ProposalMilestone's model comment in schema.prisma). createMany is
+      // one extra round-trip regardless of milestone count, same reasoning
+      // as the timeout comment below — six round-trips became seven.
+      if (proposalMilestones.length > 0) {
+        await tx.milestone.createMany({
+          data: proposalMilestones.map((m) => ({
+            contractId: contract.id,
+            title: m.title,
+            amount: m.amount,
+            milestoneOrder: m.milestoneOrder,
+          })),
+        });
+      }
+
+      return contract;
     },
     // Default is 5000ms — observed real-world latency through the pooled
     // connection came in at ~5.5s for this transaction's six round-trips,
     // tripping the default and closing the transaction before the final
     // statement ran. Six small statements shouldn't need 15s of DB work;
     // this headroom is for connection/pooler latency, not query cost.
+    // Still 15000ms after adding the milestone lookup/promotion (two more
+    // round-trips, one read + one batched write) — headroom was sized for
+    // pooler/connection latency, not per-statement query cost, so it has
+    // slack for this. Revisit if proposals start carrying many more
+    // milestones than the UI's current handful.
     { timeout: 15000 },
   );
 

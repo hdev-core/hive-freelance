@@ -31,6 +31,31 @@ jobProposalsRouter.get(
   }),
 );
 
+const httpUrl = z
+  .string()
+  .refine(
+    (val) => {
+      try {
+        const protocol = new URL(val).protocol;
+        return protocol === "http:" || protocol === "https:";
+      } catch {
+        return false;
+      }
+    },
+    { message: "URL must use http or https" },
+  );
+
+const portfolioLinkSchema = z.object({
+  title: z.string().min(1).max(100),
+  url: httpUrl,
+});
+
+const proposalMilestoneSchema = z.object({
+  title: z.string().min(1).max(200),
+  amount: z.number().positive(),
+  duration: z.string().min(1).max(50),
+});
+
 jobProposalsRouter.post(
   "/",
   requireAuth,
@@ -40,6 +65,10 @@ jobProposalsRouter.post(
       .object({
         cover_letter: z.string().min(1),
         bid_amount: z.number().positive(),
+        estimated_duration: z.string().max(50).nullable().optional(),
+        available_to_start: z.string().max(50).nullable().optional(),
+        portfolio_links: z.array(portfolioLinkSchema).max(10).nullable().optional(),
+        milestones: z.array(proposalMilestoneSchema).min(1).max(20),
       })
       .parse(req.body);
     const proposal = await submitProposal(param(req, "id"), req.user!.id, body);

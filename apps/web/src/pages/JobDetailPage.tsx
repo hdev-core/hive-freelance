@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, ShieldCheck } from "lucide-react";
 import { Card, Badge } from "../components/ui";
-import { SkillTag, JobDetailSidebar, StatusBadge } from "../components/marketplace";
+import { SkillTag, JobDetailSidebar, StatusBadge, ProposalsList } from "../components/marketplace";
 import { getJob } from "../services/jobsService";
 import { formatRelativeTime } from "../lib/formatRelativeTime";
 import { formatBudget } from "../lib/formatBudget";
+import { useSession } from "../hooks/useSession";
 
 type JobDetail = Awaited<ReturnType<typeof getJob>>;
 
@@ -25,6 +26,7 @@ function JobDetailSkeleton() {
 
 export function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useSession();
   const [job, setJob] = useState<JobDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -139,6 +141,8 @@ export function JobDetailPage() {
                 </p>
               </Card>
             )}
+
+            {id && (user?.role === "client" || user?.role === "both") && <ProposalsList jobId={id} />}
           </div>
 
           <JobDetailSidebar job={job} />

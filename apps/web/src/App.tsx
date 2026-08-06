@@ -5,7 +5,6 @@ import {
   LayoutGrid,
   Lock,
   MessageSquare,
-  Send,
   Settings,
   ShieldCheck,
   User,
@@ -27,6 +26,7 @@ import { ContractPage } from "./pages/ContractPage";
 import { ContractsPage } from "./pages/ContractsPage";
 import { JobsListPage } from "./pages/JobsListPage";
 import { JobDetailPage } from "./pages/JobDetailPage";
+import { SubmitProposalPage } from "./pages/SubmitProposalPage";
 import { PostJobPage } from "./pages/PostJobPage";
 import { ClientJobsPage } from "./pages/ClientJobsPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -78,16 +78,9 @@ export function App() {
           <Route path="jobs/new" element={<PostJobPage />} />
         </Route>
         <Route path="jobs/:id" element={<JobDetailPage />} />
-        <Route
-          path="jobs/:id/apply"
-          element={
-            <PlaceholderPage
-              title="Submit a proposal"
-              description="The milestone-based proposal builder lands in a later milestone."
-              icon={Send}
-            />
-          }
-        />
+        <Route element={<RequireAuth allow={["freelancer", "both"]} />}>
+          <Route path="jobs/:id/apply" element={<SubmitProposalPage />} />
+        </Route>
         <Route
           path="jobs/:id/hire"
           element={
@@ -189,16 +182,7 @@ export function App() {
             <Route index element={<Navigate to="/freelancer/overview" replace />} />
             <Route path="jobs" element={<JobsListPage />} />
             <Route path="jobs/:id" element={<JobDetailPage />} />
-            <Route
-              path="jobs/:id/apply"
-              element={
-                <PlaceholderPage
-                  title="Submit a proposal"
-                  description="The milestone-based proposal builder lands in a later milestone."
-                  icon={Send}
-                />
-              }
-            />
+            <Route path="jobs/:id/apply" element={<SubmitProposalPage />} />
             {freelancerNav
               .filter((item) => item.path !== "jobs" && item.path !== "profile")
               .map((item) => (
