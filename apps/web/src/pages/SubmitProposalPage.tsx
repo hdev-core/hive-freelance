@@ -1,15 +1,15 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, Send, ShieldCheck, Trash2 } from "lucide-react";
-import { Badge, Button, Card, IconButton, Input, PageHeader, Textarea } from "../components/ui";
-import { getJob, type MockJob } from "../services/jobsService";
+import { ArrowLeft, Plus, Send, Trash2 } from "lucide-react";
+import { Button, Card, IconButton, Input, PageHeader, Textarea } from "../components/ui";
+import { getJob, type JobDetailResponse } from "../services/jobDetailService";
 import { submitProposal, type SubmitProposalMilestoneInput } from "../services/proposalsService";
 import { formatBudget } from "../lib/formatBudget";
 
 // No real fee/payments field exists on the backend yet for the M3 flow —
-// this mirrors jobsService.ts's approach to mockup-only numbers: a clearly
-// isolated, commented constant instead of inventing a backend contract.
-// Replace with a real value once a fee endpoint/field exists.
+// kept as a clearly isolated, commented constant instead of inventing a
+// backend contract. Replace with a real value once a fee endpoint/field
+// exists.
 const SERVICE_FEE_RATE = 0.1;
 
 type MilestoneDraft = {
@@ -26,7 +26,7 @@ export function SubmitProposalPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [job, setJob] = useState<MockJob | null>(null);
+  const [job, setJob] = useState<JobDetailResponse | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
 
   const [coverLetter, setCoverLetter] = useState("");
@@ -198,14 +198,16 @@ export function SubmitProposalPage() {
                       </IconButton>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_8rem_8rem]">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_10rem_10rem]">
                     <Input
+                      className="min-w-0"
                       placeholder="Milestone title"
                       value={milestone.title}
                       onChange={(e) => updateMilestone(index, { title: e.target.value })}
                       required
                     />
                     <Input
+                      className="min-w-0"
                       type="number"
                       min={0}
                       step="0.01"
@@ -215,6 +217,7 @@ export function SubmitProposalPage() {
                       required
                     />
                     <Input
+                      className="min-w-0"
                       placeholder="Duration"
                       value={milestone.duration}
                       onChange={(e) => updateMilestone(index, { duration: e.target.value })}
@@ -277,11 +280,6 @@ export function SubmitProposalPage() {
                 <div className="mt-2 rounded-lg bg-surface-muted p-3">
                   <p className="text-xs text-text-secondary">Applying to</p>
                   <p className="mt-1 text-sm font-semibold text-text-primary">{job.title}</p>
-                  {job.mock.funding_status === "escrow_funded" && (
-                    <Badge variant="success" className="mt-2">
-                      <ShieldCheck size={12} /> Escrow Funded
-                    </Badge>
-                  )}
                 </div>
               ) : (
                 <p className="mt-2 text-xs text-text-muted">{jobError ?? "Loading job..."}</p>
@@ -292,7 +290,7 @@ export function SubmitProposalPage() {
               {job && (
                 <div className="flex justify-between text-text-secondary">
                   <span>Client budget</span>
-                  <span className="font-medium text-text-primary">{formatBudget(job.budget, job.mock.pricing_type)}</span>
+                  <span className="font-medium text-text-primary">{formatBudget(job.budget)}</span>
                 </div>
               )}
               <div className="flex justify-between text-text-secondary">

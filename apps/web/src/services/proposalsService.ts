@@ -1,6 +1,6 @@
 /**
- * Proposals API client. Real, already-shipped backend (apps/api/src/{routes,services}/proposals.ts)
- * — not a mock, unlike jobsService.ts. Shape source of truth: packages/db/src/types.ts
+ * Proposals API client. Real, already-shipped backend (apps/api/src/{routes,services}/proposals.ts).
+ * Shape source of truth: packages/db/src/types.ts
  * (ProposalRow, ProposalMilestoneRow) and the zod body schema in routes/proposals.ts.
  */
 import { apiFetch } from "../api";

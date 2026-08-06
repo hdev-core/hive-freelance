@@ -46,14 +46,24 @@ jobsRouter.get(
     if (budget_min != null && budget_max != null && budget_min > budget_max) {
       throw new AppError(400, "budget_min cannot be greater than budget_max");
     }
+    const client_id = req.query.client_id
+      ? String(req.query.client_id)
+      : undefined;
+    if (client_id != null && !/^\d+$/.test(client_id)) {
+      throw new AppError(400, "client_id must be a positive integer");
+    }
     const data = await listJobs({
       category: req.query.category
         ? String(req.query.category)
         : undefined,
       skill: req.query.skill ? String(req.query.skill) : undefined,
+      // Only defaulted to "open" for the public browse case — a client_id
+      // filter means "my posted jobs," which should show every status.
+      // See listJobs' own status-defaulting for the client_id branch.
       status: req.query.status
         ? jobStatusSchema.parse(req.query.status)
-        : "open",
+        : undefined,
+      client_id,
       budget_min,
       budget_max,
       page: req.query.page ? Number(req.query.page) : 1,

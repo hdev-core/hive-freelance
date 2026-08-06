@@ -81,6 +81,12 @@ export function App() {
         <Route element={<RequireAuth allow={["freelancer", "both"]} />}>
           <Route path="jobs/:id/apply" element={<SubmitProposalPage />} />
         </Route>
+        {/* No-login-required profile view — GET /users/:username is a public
+            endpoint (routes/users.ts has no requireAuth on it), and viewing
+            "About the client" from a job page shouldn't force a login.
+            Distinct from /client|freelancer/profile/:username, which stays
+            auth-gated because it lives under DashboardLayout. */}
+        <Route path="profile/:username" element={<ProfilePage />} />
         <Route
           path="jobs/:id/hire"
           element={

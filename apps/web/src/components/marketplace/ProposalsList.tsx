@@ -6,11 +6,11 @@ import { formatRelativeTime } from "../../lib/formatRelativeTime";
 
 /**
  * Client-facing proposal list/comparison for the job detail page. Takes only
- * `jobId`, not the job object itself — JobDetailPage.tsx still renders from
- * jobsService.ts's mock store (see that file's header comment), so this
- * fetches real proposal data independently instead of depending on the job
- * shape. Keeps this component stable once the Jobs API integration lands
- * and JobDetailPage's mock job type goes away.
+ * `jobId`, not the job object itself, and fetches real proposal data
+ * independently of however the job itself was loaded. JobDetailPage.tsx now
+ * uses the real Jobs API (jobDetailService.ts) for job data, but this
+ * component never depended on that shape in the first place — no change
+ * needed here when that swap happened.
  */
 export function ProposalsList({ jobId }: { jobId: string }) {
   const [proposals, setProposals] = useState<ProposalRow[] | null>(null);

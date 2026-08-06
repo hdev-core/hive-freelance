@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Briefcase } from "lucide-react";
 import { PageHeader, Card, LinkButton } from "../components/ui";
-import { JobCard } from "../components/marketplace";
-import { listMyJobs, type MockJob } from "../services/jobsService";
+import { JobListCard } from "../components/marketplace";
+import { listMyJobs, type JobListItem } from "../services/jobDetailService";
+import { useSession } from "../hooks/useSession";
 
 function ClientJobCardSkeleton() {
   return (
@@ -15,17 +16,23 @@ function ClientJobCardSkeleton() {
 }
 
 export function ClientJobsPage() {
-  const [jobs, setJobs] = useState<MockJob[]>([]);
+  const { loading: sessionLoading, user } = useSession();
+  const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (sessionLoading) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);
-    listMyJobs()
-      .then((items) => {
-        if (!cancelled) setJobs(items);
+    listMyJobs(user.id)
+      .then((res) => {
+        if (!cancelled) setJobs(res.items);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load your jobs");
@@ -36,7 +43,7 @@ export function ClientJobsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [sessionLoading, user]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,7 +63,7 @@ export function ClientJobsPage() {
         </div>
       )}
 
-      {loading && (
+      {(sessionLoading || loading) && (
         <div className="flex flex-col gap-4">
           {Array.from({ length: 2 }).map((_, i) => (
             <ClientJobCardSkeleton key={i} />
@@ -64,7 +71,7 @@ export function ClientJobsPage() {
         </div>
       )}
 
-      {!loading && !error && jobs.length === 0 && (
+      {!sessionLoading && !loading && !error && jobs.length === 0 && (
         <Card className="flex flex-col items-center gap-3 py-12 text-center">
           <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-subtle text-text-primary">
             <Briefcase size={22} />
@@ -79,10 +86,10 @@ export function ClientJobsPage() {
         </Card>
       )}
 
-      {!loading && !error && jobs.length > 0 && (
+      {!sessionLoading && !loading && !error && jobs.length > 0 && (
         <div className="flex flex-col gap-4">
           {jobs.map((job) => (
-            <JobCard key={job.id} job={job} />
+            <JobListCard key={job.id} job={job} />
           ))}
         </div>
       )}

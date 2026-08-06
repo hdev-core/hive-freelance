@@ -37,6 +37,15 @@ app.use(cookieParser());
 app.use(healthRouter);
 
 const v1 = express.Router();
+// Every response here is per-session or otherwise dynamic (auth/me,
+// profiles, job/proposal state) — without this, a GET can be served from
+// the browser's HTTP cache after a cookie changes (e.g. logging into a
+// different account), since the URL alone doesn't vary. no-store forces a
+// real request every time.
+v1.use((_req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
 v1.use("/auth", authRouter);
 v1.use("/users", usersRouter);
 v1.use("/jobs", jobsRouter);

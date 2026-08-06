@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader, Card, Input, Textarea, Select, Button } from "../components/ui";
-import { createJob } from "../services/jobsService";
+import { createJob } from "../services/jobDetailService";
 
 const CATEGORIES = ["Development", "Design", "Writing", "Marketing", "Video & Animation", "Data & AI"];
 
@@ -13,7 +13,6 @@ export function PostJobPage() {
   const [description, setDescription] = useState("");
   const [budget, setBudget] = useState("");
   const [category, setCategory] = useState(CATEGORIES[0]);
-  const [pricingType, setPricingType] = useState<"fixed" | "hourly">("fixed");
   const [skillsInput, setSkillsInput] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
@@ -30,16 +29,13 @@ export function PostJobPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const job = await createJob(
-        {
-          title,
-          description,
-          budget: budgetNumber,
-          category,
-          skills_required: skills.length > 0 ? skills : undefined,
-        },
-        { pricing_type: pricingType },
-      );
+      const job = await createJob({
+        title,
+        description,
+        budget: budgetNumber,
+        category,
+        skills_required: skills.length > 0 ? skills : undefined,
+      });
       navigate(`../${job.id}`, { relative: "path" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to post job");
@@ -92,26 +88,15 @@ export function PostJobPage() {
 
           <Card className="flex flex-col gap-4">
             <h2 className="text-base font-semibold text-text-primary">Budget & category</h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value)}>
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </Select>
-              <Select
-                label="Pricing type"
-                value={pricingType}
-                onChange={(e) => setPricingType(e.target.value as "fixed" | "hourly")}
-                hint="Display only for now — not yet a real Jobs API field."
-              >
-                <option value="fixed">Fixed price</option>
-                <option value="hourly">Hourly</option>
-              </Select>
-            </div>
+            <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value)}>
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
             <Input
-              label={pricingType === "hourly" ? "Hourly rate (HBD)" : "Budget (HBD)"}
+              label="Budget (HBD)"
               type="number"
               min={0}
               step="0.01"
@@ -130,11 +115,9 @@ export function PostJobPage() {
               <p className="text-xs text-text-muted">{category}</p>
             </div>
             <div className="border-t border-border pt-4">
-              <p className="text-sm text-text-secondary">
-                {pricingType === "hourly" ? "Hourly rate" : "Budget"}
-              </p>
+              <p className="text-sm text-text-secondary">Budget</p>
               <p className="mt-1 text-2xl font-bold text-text-primary">
-                {budgetNumber > 0 ? budgetNumber.toLocaleString("en-US") : "0"} HBD{pricingType === "hourly" ? "/hr" : ""}
+                {budgetNumber > 0 ? budgetNumber.toLocaleString("en-US") : "0"} HBD
               </p>
             </div>
             {error && <p className="text-sm text-text-primary">{error}</p>}

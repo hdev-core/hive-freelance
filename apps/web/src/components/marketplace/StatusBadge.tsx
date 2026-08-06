@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, ShieldAlert, ShieldCheck, type LucideIcon } from "lucide-react";
+import { CheckCircle2, CircleDot, Clock, ShieldAlert, ShieldCheck, XCircle, type LucideIcon } from "lucide-react";
 import { cn } from "../../lib/cn";
 
 /**
@@ -18,7 +18,8 @@ export type StatusBadgeStatus =
   | "suspended"
   | "open"
   | "in_progress"
-  | "completed";
+  | "completed"
+  | "cancelled";
 
 const statusConfig: Record<StatusBadgeStatus, { label: string; icon?: LucideIcon; className: string }> = {
   escrow_funded: {
@@ -42,7 +43,8 @@ const statusConfig: Record<StatusBadgeStatus, { label: string; icon?: LucideIcon
   },
   open: {
     label: "Open",
-    className: "border border-border bg-surface-muted text-text-secondary",
+    icon: CircleDot,
+    className: "border border-accent-subtle-border bg-accent-subtle text-accent",
   },
   in_progress: {
     label: "In Progress",
@@ -53,6 +55,11 @@ const statusConfig: Record<StatusBadgeStatus, { label: string; icon?: LucideIcon
     label: "Completed",
     icon: CheckCircle2,
     className: "bg-success-bg text-success-text",
+  },
+  cancelled: {
+    label: "Cancelled",
+    icon: XCircle,
+    className: "border border-border bg-surface-muted text-text-muted",
   },
 };
 

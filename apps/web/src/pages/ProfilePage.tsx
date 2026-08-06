@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { useOutletContext, useParams } from "react-router-dom";
-import { Card } from "../components/ui";
+import { useNavigate, useOutletContext, useParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { Button, Card } from "../components/ui";
 import {
   ProfileAboutCard,
   ProfileHeaderCard,
@@ -31,8 +32,12 @@ function ProfileSkeleton() {
  * not by which route was used to get here.
  */
 export function ProfilePage() {
+  const navigate = useNavigate();
   const { username } = useParams<{ username?: string }>();
-  const role = useOutletContext<DashboardRole>();
+  // undefined when rendered from the public /profile/:username route,
+  // which has no DashboardLayout above it to provide this context — see
+  // ProfileHeaderCard's role prop comment.
+  const role = useOutletContext<DashboardRole | undefined>();
   const { user: sessionUser } = useSession();
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,6 +67,11 @@ export function ProfilePage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <Button type="button" variant="ghost" size="sm" className="w-fit" onClick={() => navigate(-1)}>
+        <ArrowLeft size={16} />
+        Back
+      </Button>
+
       {loading && <ProfileSkeleton />}
 
       {!loading && error && (

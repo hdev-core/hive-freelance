@@ -1,21 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { PageHeader, Card, Select } from "../components/ui";
-import { FilterSidebar, JobCard, type BudgetRangeValue } from "../components/marketplace";
-import { getAllSkills, getCategoryFacets, listJobs, type MockJob } from "../services/jobsService";
+import { FilterSidebar, JobListCard, type BudgetRangeValue } from "../components/marketplace";
+import { listJobs, type JobListItem } from "../services/jobDetailService";
 
-function matchesBudgetRange(budget: number, range: BudgetRangeValue): boolean {
+/** Maps the range picker onto GET /jobs' real budget_min/budget_max filter.
+ * ".99" upper bounds approximate the original mock's exclusive `< limit`
+ * comparison — budget is a real Decimal(10,2) column, so an inclusive `lte`
+ * needs a boundary just under the round number to behave the same way. */
+function budgetRangeToQuery(range: BudgetRangeValue): { budget_min?: number; budget_max?: number } {
   switch (range) {
     case "any":
-      return true;
+      return {};
     case "under-1000":
-      return budget < 1000;
+      return { budget_max: 999.99 };
     case "1000-3000":
-      return budget >= 1000 && budget < 3000;
+      return { budget_min: 1000, budget_max: 2999.99 };
     case "3000-5000":
-      return budget >= 3000 && budget < 5000;
+      return { budget_min: 3000, budget_max: 4999.99 };
     case "5000-plus":
-      return budget >= 5000;
+      return { budget_min: 5000 };
   }
 }
 
@@ -35,7 +39,7 @@ function JobCardSkeleton() {
 }
 
 export function JobsListPage() {
-  const [rawItems, setRawItems] = useState<MockJob[]>([]);
+  const [rawItems, setRawItems] = useState<JobListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,13 +47,17 @@ export function JobsListPage() {
   const [category, setCategory] = useState<string | null>(null);
   const [skill, setSkill] = useState<string | null>(null);
   const [budgetRange, setBudgetRange] = useState<BudgetRangeValue>("any");
-  const [escrowFundedOnly, setEscrowFundedOnly] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    listJobs({ category: category ?? undefined, skill: skill ?? undefined, limit: 50 })
+    listJobs({
+      category: category ?? undefined,
+      skill: skill ?? undefined,
+      ...budgetRangeToQuery(budgetRange),
+      limit: 50,
+    })
       .then((data) => {
         if (!cancelled) setRawItems(data.items);
       })
@@ -62,24 +70,38 @@ export function JobsListPage() {
     return () => {
       cancelled = true;
     };
-  }, [category, skill]);
+  }, [category, skill, budgetRange]);
 
-  const categories = useMemo(() => getCategoryFacets(), [rawItems]);
-  const skills = useMemo(() => getAllSkills(), [rawItems]);
+  // Derived from the currently loaded page, not a dedicated facets endpoint
+  // (none exists) — same approach the old mock version used, just actually
+  // scoped to what's on screen instead of the whole store regardless of
+  // filters.
+  const categories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const job of rawItems) {
+      if (!job.category) continue;
+      counts.set(job.category, (counts.get(job.category) ?? 0) + 1);
+    }
+    return Array.from(counts.entries()).map(([label, count]) => ({ label, count }));
+  }, [rawItems]);
+
+  const skills = useMemo(() => {
+    const set = new Set<string>();
+    for (const job of rawItems) {
+      for (const s of job.skills_required ?? []) set.add(s);
+    }
+    return Array.from(set).sort();
+  }, [rawItems]);
 
   const visibleItems = useMemo(() => {
+    if (!search.trim()) return rawItems;
+    const q = search.trim().toLowerCase();
     return rawItems.filter((job) => {
-      if (escrowFundedOnly && job.mock.funding_status !== "escrow_funded") return false;
-      if (!matchesBudgetRange(Number(job.budget), budgetRange)) return false;
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
-        const inTitle = job.title.toLowerCase().includes(q);
-        const inSkills = (job.skills_required ?? []).some((s) => s.toLowerCase().includes(q));
-        if (!inTitle && !inSkills) return false;
-      }
-      return true;
+      const inTitle = job.title.toLowerCase().includes(q);
+      const inSkills = (job.skills_required ?? []).some((s) => s.toLowerCase().includes(q));
+      return inTitle || inSkills;
     });
-  }, [rawItems, escrowFundedOnly, budgetRange, search]);
+  }, [rawItems, search]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -100,8 +122,6 @@ export function JobsListPage() {
               skills={skills}
               selectedSkill={skill}
               onSelectSkill={setSkill}
-              escrowFundedOnly={escrowFundedOnly}
-              onToggleEscrowFundedOnly={() => setEscrowFundedOnly((v) => !v)}
             />
           </Card>
         </aside>
@@ -142,7 +162,7 @@ export function JobsListPage() {
 
           {!loading &&
             !error &&
-            visibleItems.map((job) => <JobCard key={job.id} job={job} />)}
+            visibleItems.map((job) => <JobListCard key={job.id} job={job} />)}
         </div>
       </div>
     </div>

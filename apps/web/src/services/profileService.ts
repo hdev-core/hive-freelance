@@ -1,7 +1,7 @@
 /**
  * Profile API client. Shape source of truth: API_PROFILE.md (repo root) and
  * apps/api/src/{routes,services}/profiles.ts — this is the real, already-shipped
- * backend, not a mock (unlike jobsService.ts's mock layer).
+ * backend, same as jobDetailService.ts and proposalsService.ts.
  */
 import { apiFetch } from "../api";
 

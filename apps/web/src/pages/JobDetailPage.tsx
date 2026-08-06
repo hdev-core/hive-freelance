@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, Globe, ShieldCheck } from "lucide-react";
 import { Card, Badge } from "../components/ui";
-import { SkillTag, JobDetailSidebar, StatusBadge, ProposalsList } from "../components/marketplace";
-import { getJob } from "../services/jobsService";
+import { SkillTag, JobDetailSidebar, ProposalsList, StatusBadge } from "../components/marketplace";
+import { getJob } from "../services/jobDetailService";
 import { formatRelativeTime } from "../lib/formatRelativeTime";
 import { formatBudget } from "../lib/formatBudget";
 import { useSession } from "../hooks/useSession";
@@ -74,24 +74,21 @@ export function JobDetailPage() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_22.5rem]">
           <div className="flex flex-col gap-6">
             <Card className="flex flex-col gap-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-xs text-text-secondary">
-                  <Badge variant="neutral">{job.category ?? "General"}</Badge>
-                  <span>{formatRelativeTime(new Date(job.created_at))}</span>
-                </div>
-                <StatusBadge status={job.mock.funding_status} />
+              <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+                <Badge variant="neutral">{job.category ?? "General"}</Badge>
+                <StatusBadge status={job.status} />
+                <span className="flex items-center gap-1">
+                  <Clock size={12} className="shrink-0" />
+                  {formatRelativeTime(new Date(job.created_at))}
+                </span>
               </div>
 
               <h1 className="text-2xl font-bold text-text-primary">{job.title}</h1>
 
-              <div className="grid grid-cols-3 gap-4 border-y border-border py-4 text-sm">
+              <div className="grid grid-cols-2 gap-4 border-y border-border py-4 text-sm">
                 <div>
                   <p className="text-text-secondary">Budget</p>
-                  <p className="mt-1 font-bold text-text-primary">{formatBudget(job.budget, job.mock.pricing_type)}</p>
-                </div>
-                <div>
-                  <p className="text-text-secondary">Type</p>
-                  <p className="mt-1 font-bold text-text-primary">{job.mock.pricing_type === "hourly" ? "Hourly" : "Fixed"}</p>
+                  <p className="mt-1 font-bold text-text-primary">{formatBudget(job.budget)}</p>
                 </div>
                 <div>
                   <p className="text-text-secondary">Proposals</p>
@@ -114,33 +111,35 @@ export function JobDetailPage() {
               </div>
             </Card>
 
-            {job.mock.funding_status === "escrow_funded" && (
-              <Card className="flex flex-col gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-accent">
-                    <ShieldCheck size={16} />
-                  </span>
-                  <h2 className="text-base font-semibold text-text-primary">Blockchain escrow summary</h2>
+            <Card className="flex flex-col gap-4">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-accent">
+                  <ShieldCheck size={16} />
+                </span>
+                <h2 className="text-base font-semibold text-text-primary">Payments protected by native Hive escrow</h2>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="rounded-lg border border-border bg-surface-muted p-4">
+                  <p className="text-xs text-text-secondary">Funds release</p>
+                  <p className="mt-1 flex items-center gap-1.5 font-semibold text-text-primary">
+                    <CheckCircle2 size={14} className="shrink-0 text-accent" />
+                    On milestone approval
+                  </p>
                 </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="rounded-lg border border-border bg-surface-muted p-4">
-                    <p className="text-xs text-text-secondary">Escrow status</p>
-                    <p className="mt-1 flex items-center gap-1.5 font-semibold text-success-text">
-                      <CheckCircle2 size={14} className="shrink-0" />
-                      Fully funded
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-surface-muted p-4">
-                    <p className="text-xs text-text-secondary">Network</p>
-                    <p className="mt-1 font-semibold text-text-primary">Hive Mainnet</p>
-                  </div>
+                <div className="rounded-lg border border-border bg-surface-muted p-4">
+                  <p className="text-xs text-text-secondary">Network</p>
+                  <p className="mt-1 flex items-center gap-1.5 font-semibold text-text-primary">
+                    <Globe size={14} className="shrink-0 text-accent" />
+                    Hive Mainnet
+                  </p>
                 </div>
-                <p className="rounded-lg bg-accent-subtle p-3 text-xs text-accent">
-                  Once funded, the escrow amount is locked on-chain via native Hive escrow and cannot be changed by either
-                  party. Funds release only when milestones are approved.
-                </p>
-              </Card>
-            )}
+              </div>
+              <p className="rounded-lg bg-accent-subtle p-3 text-xs text-accent">
+                Once this job is hired, the agreed amount is locked on-chain via native Hive escrow and cannot be
+                changed by either party. Funds release only when milestones are approved, and any dispute is
+                resolved by the platform's escrow agent.
+              </p>
+            </Card>
 
             {id && (user?.role === "client" || user?.role === "both") && <ProposalsList jobId={id} />}
           </div>
