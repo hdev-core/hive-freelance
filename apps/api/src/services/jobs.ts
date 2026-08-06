@@ -5,6 +5,8 @@ export async function listJobs(opts: {
   category?: string;
   skill?: string;
   status?: string;
+  budget_min?: number;
+  budget_max?: number;
   page?: number;
   limit?: number;
 }) {
@@ -16,6 +18,12 @@ export async function listJobs(opts: {
   const where: Record<string, unknown> = { status };
   if (opts.category) where.category = opts.category;
   if (opts.skill) where.skillsRequired = { has: opts.skill };
+  if (opts.budget_min != null || opts.budget_max != null) {
+    const budget: Record<string, number> = {};
+    if (opts.budget_min != null) budget.gte = opts.budget_min;
+    if (opts.budget_max != null) budget.lte = opts.budget_max;
+    where.budget = budget;
+  }
 
   const jobs = await prisma.job.findMany({
     where,
@@ -95,6 +103,27 @@ export async function updateJob(
   const updated = await prisma.job.update({
     where: { id: BigInt(jobId) },
     data: updateData,
+  });
+  return toJobRow(updated);
+}
+
+export async function cancelJob(
+  jobId: string,
+  clientId: string,
+): Promise<JobRow> {
+  const job = await getJob(jobId);
+  if (job.client_id !== clientId) {
+    throw new AppError(403, "Not job owner");
+  }
+  if (job.status !== "open" && job.status !== "in_progress") {
+    throw new AppError(
+      400,
+      "Only open or in-progress jobs can be cancelled",
+    );
+  }
+  const updated = await prisma.job.update({
+    where: { id: BigInt(jobId) },
+    data: { status: "cancelled" },
   });
   return toJobRow(updated);
 }
