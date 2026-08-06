@@ -5,6 +5,7 @@ import { Badge } from "../ui/Badge";
 import { GoogleIcon } from "../ui/GoogleIcon";
 import { LinkButton } from "../ui/LinkButton";
 import { RatingStars } from "./RatingStars";
+import type { DashboardRole } from "../layout/types";
 import type { ProfileResponse } from "../../services/profileService";
 
 function formatMemberSince(iso: string): string {
@@ -24,9 +25,17 @@ function signInMethod(authType: ProfileResponse["authType"]): { label: string; i
 export function ProfileHeaderCard({
   profile,
   isOwnProfile,
+  role,
 }: {
   profile: ProfileResponse;
   isOwnProfile: boolean;
+  /** Which dashboard tree we're rendering under ("client"/"freelancer") —
+   * NOT profile.role, which is the viewed account's real role and can be
+   * "both" (not a valid URL segment). Needed as an absolute path because
+   * this card renders at both /:role/profile and /:role/profile/:username;
+   * a relative "edit" resolves to .../:username/edit from the latter,
+   * which isn't a route. */
+  role: DashboardRole;
 }) {
   const p = profile.profile;
   const displayName = p?.display_name ?? profile.hiveUsername;
@@ -52,7 +61,7 @@ export function ProfileHeaderCard({
             className="border-4 border-surface"
           />
           {isOwnProfile && (
-            <LinkButton to="edit" variant="outline" size="sm" className="mb-1">
+            <LinkButton to={`/${role}/profile/edit`} variant="outline" size="sm" className="mb-1">
               <Pencil size={14} />
               Edit profile
             </LinkButton>

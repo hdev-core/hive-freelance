@@ -87,6 +87,9 @@ export function EditProfilePage() {
 
   const canEditSkillsAndRate = initial?.role === "freelancer" || initial?.role === "both";
 
+  // Stays a fixed relative path (unlike ProfilePage's Back, which uses
+  // browser history) — profile/edit only ever resolves to /:role/profile,
+  // your own profile, with no other-owner ambiguity to get wrong.
   function goBack() {
     navigate("..", { relative: "path" });
   }
