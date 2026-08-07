@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { CheckCircle2, Circle, KeyRound, Lock, ShieldCheck } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { apiFetch } from "../api";
-import { dashboardPathForRole, useAuth } from "../auth/AuthProvider";
+import { useAuth } from "../auth/AuthProvider";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Select } from "../components/ui/Select";

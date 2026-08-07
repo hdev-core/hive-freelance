@@ -8,11 +8,13 @@ import {
   type ReactNode,
 } from "react";
 import { apiFetch } from "../api";
+import { dashboardPathForRole } from "../lib/dashboardPath";
+import type { UserRole } from "../hooks/useSession";
 
 export type AuthUser = {
   id: string;
   username: string;
-  role: string;
+  role: UserRole;
   authType?: string | null;
   email?: string | null;
   custodial?: boolean;
@@ -28,9 +30,8 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function dashboardPathForRole(role: string): string {
-  return role === "freelancer" ? "/freelancer/overview" : "/client/overview";
-}
+/** Re-export so callers that already import from AuthProvider keep working. */
+export { dashboardPathForRole };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
