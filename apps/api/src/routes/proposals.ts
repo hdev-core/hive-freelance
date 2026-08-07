@@ -10,6 +10,7 @@ import {
 import {
   acceptProposal,
   confirmAccept,
+  getAcceptCustomJson,
   listMyProposals,
   listProposalsForJob,
   rejectProposal,
@@ -64,7 +65,7 @@ const portfolioLinkSchema = z.object({
 
 const proposalMilestoneSchema = z.object({
   title: z.string().min(1).max(200),
-  amount: z.number().positive(),
+  amount: z.number().positive().max(99_999_999.99).multipleOf(0.01),
   duration: z.string().min(1).max(50),
 });
 
@@ -76,7 +77,7 @@ jobProposalsRouter.post(
     const body = z
       .object({
         cover_letter: z.string().min(1),
-        bid_amount: z.number().positive(),
+        bid_amount: z.number().positive().max(99_999_999.99).multipleOf(0.01),
         estimated_duration: z.string().max(50).nullable().optional(),
         available_to_start: z.string().max(50).nullable().optional(),
         portfolio_links: z.array(portfolioLinkSchema).max(10).nullable().optional(),
@@ -104,6 +105,16 @@ proposalsRouter.post(
   requireClient,
   asyncHandler(async (req, res) => {
     const result = await acceptProposal(param(req, "id"), req.user!.id);
+    res.json(result);
+  }),
+);
+
+proposalsRouter.get(
+  "/:id/accept/custom-json",
+  requireAuth,
+  requireClient,
+  asyncHandler(async (req, res) => {
+    const result = await getAcceptCustomJson(param(req, "id"), req.user!.id);
     res.json(result);
   }),
 );

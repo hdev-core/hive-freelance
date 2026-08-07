@@ -210,6 +210,34 @@ export async function rejectProposal(proposalId: string, clientId: string) {
   return toProposalRow(updated);
 }
 
+/** Shared by acceptProposal (fresh contract) and getAcceptCustomJson (retry
+ * after a dropped/cancelled Keychain broadcast) so both send byte-identical
+ * custom_json for the same contract. */
+function buildContractCreatedCustomJson(contract: {
+  id: bigint;
+  jobId: bigint;
+  proposalId: bigint;
+  clientId: bigint;
+  freelancerId: bigint;
+  totalAmount: Prisma.Decimal;
+}) {
+  return {
+    id: APP_ID,
+    json: JSON.stringify({
+      app_id: APP_ID,
+      type: "contract_created",
+      contract_id: contract.id.toString(),
+      job_id: contract.jobId.toString(),
+      proposal_id: contract.proposalId.toString(),
+      client_id: contract.clientId.toString(),
+      freelancer_id: contract.freelancerId.toString(),
+      total_amount: contract.totalAmount.toString(),
+    }),
+    required_auths: [] as string[],
+    required_posting_auths: [] as string[], // filled by client username on broadcast
+  };
+}
+
 /**
  * Preserves the original's pessimistic locking: two clients accepting
  * different proposals on the same job at the same instant must not both
@@ -247,6 +275,9 @@ export async function acceptProposal(proposalId: string, clientId: string) {
 
       const job = await tx.job.findUnique({ where: { id: proposal.job_id } });
       if (!job) throw new AppError(404, "Job not found");
+      if (job.status !== "open") {
+        throw new AppError(409, "This job is no longer open.");
+      }
       if (job.clientId.toString() !== clientId) {
         throw new AppError(403, "Only the job client can accept");
       }
@@ -323,21 +354,7 @@ export async function acceptProposal(proposalId: string, clientId: string) {
     { timeout: 15000 },
   );
 
-  const custom_json = {
-    id: APP_ID,
-    json: JSON.stringify({
-      app_id: APP_ID,
-      type: "contract_created",
-      contract_id: contract.id.toString(),
-      job_id: contract.jobId.toString(),
-      proposal_id: contract.proposalId.toString(),
-      client_id: contract.clientId.toString(),
-      freelancer_id: contract.freelancerId.toString(),
-      total_amount: contract.totalAmount.toString(),
-    }),
-    required_auths: [],
-    required_posting_auths: [], // filled by client username on broadcast
-  };
+  const custom_json = buildContractCreatedCustomJson(contract);
 
   return { contract: toContractRow(contract), custom_json };
 }
@@ -369,4 +386,34 @@ export async function confirmAccept(
     data: { hiveTxId },
   });
   return toContractRow(updated);
+}
+
+/**
+ * Re-issues the same custom_json acceptProposal already returned, for the
+ * "accepted but the client cancelled/lost the Keychain broadcast" dead end:
+ * the contract row already exists with no hive_tx_id, so this can't call
+ * acceptProposal again (proposal is no longer `pending`) — it just hands
+ * back the payload to retry the broadcast + confirmAccept with.
+ */
+export async function getAcceptCustomJson(proposalId: string, clientId: string) {
+  const proposal = await prisma.proposal.findUnique({
+    where: { id: BigInt(proposalId) },
+  });
+  if (!proposal) throw new AppError(404, "Proposal not found");
+  if (proposal.status !== "accepted") {
+    throw new AppError(400, "Proposal is not accepted");
+  }
+  if (proposal.hiveTxId) {
+    throw new AppError(400, "Proposal is already confirmed on-chain");
+  }
+
+  const contract = await prisma.contract.findUnique({
+    where: { proposalId: BigInt(proposalId) },
+  });
+  if (!contract) throw new AppError(404, "Contract not found");
+  if (contract.clientId.toString() !== clientId) {
+    throw new AppError(403, "Only the client can confirm");
+  }
+
+  return { custom_json: buildContractCreatedCustomJson(contract) };
 }

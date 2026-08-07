@@ -7,6 +7,7 @@ import { getJob, type JobDetailResponse } from "../services/jobDetailService";
 import {
   acceptProposal,
   confirmAcceptProposal,
+  getAcceptCustomJson,
   listProposalsForJob,
   rejectProposal,
   type ProposalStatus,
@@ -120,6 +121,36 @@ export function JobProposalsPage() {
       await reload();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to accept proposal");
+      // The contract may already have been created (accept succeeded)
+      // before the Keychain broadcast failed/was cancelled — reload so the
+      // UI reflects the real accepted-but-unconfirmed state instead of
+      // still showing "Pending".
+      await reload().catch(() => {});
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  /** Retry path for a proposal that's `accepted` in the DB but has no
+   * hive_tx_id — acceptProposal can't be called again (proposal is no
+   * longer `pending`), so this re-fetches the same custom_json and retries
+   * just the broadcast + confirm steps. */
+  async function handleConfirmOnChain(proposalId: string) {
+    if (!user) return;
+    setBusyId(proposalId);
+    setActionError(null);
+    try {
+      const { custom_json } = await getAcceptCustomJson(proposalId);
+      const payload = {
+        ...custom_json,
+        required_posting_auths: [user.username],
+      };
+      const hive_tx_id = await requestKeychainBroadcast(user.username, [["custom_json", payload]], "Posting");
+      await confirmAcceptProposal(proposalId, hive_tx_id);
+      await reload();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to confirm on-chain");
+      await reload().catch(() => {});
     } finally {
       setBusyId(null);
     }
@@ -253,6 +284,7 @@ export function JobProposalsPage() {
               onToggleExpanded={() => toggleExpanded(proposal.id)}
               onAccept={() => handleAccept(proposal.id)}
               onReject={() => handleReject(proposal.id)}
+              onConfirm={() => handleConfirmOnChain(proposal.id)}
               busy={busyId === proposal.id}
             />
           ))}
@@ -268,6 +300,7 @@ function ProposalDetailCard({
   onToggleExpanded,
   onAccept,
   onReject,
+  onConfirm,
   busy,
 }: {
   proposal: ProposalWithFreelancer;
@@ -275,6 +308,7 @@ function ProposalDetailCard({
   onToggleExpanded: () => void;
   onAccept: () => void;
   onReject: () => void;
+  onConfirm: () => void;
   busy: boolean;
 }) {
   const coverLetterIsLong = proposal.cover_letter.length > 220;
@@ -398,7 +432,19 @@ function ProposalDetailCard({
         </div>
       )}
 
-      {proposal.status === "accepted" && (
+      {proposal.status === "accepted" && proposal.hive_tx_id == null && (
+        <div className="flex flex-col gap-2 border-t border-border pt-3">
+          <p className="text-xs text-text-secondary">
+            Contract created, but the on-chain confirmation didn't go through. Retry it to finish accepting this
+            proposal.
+          </p>
+          <Button onClick={onConfirm} disabled={busy}>
+            {busy ? "Working..." : "Confirm on-chain"}
+          </Button>
+        </div>
+      )}
+
+      {proposal.status === "accepted" && proposal.hive_tx_id != null && (
         <div className="flex items-center justify-center gap-2 rounded-lg bg-success-bg px-4 py-2.5 text-sm font-semibold text-success-text">
           <CheckCircle2 size={16} />
           Proposal accepted — contract in progress

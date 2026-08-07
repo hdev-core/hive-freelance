@@ -132,6 +132,14 @@ export function acceptProposal(proposalId: string): Promise<AcceptProposalResult
   });
 }
 
+/** GET /proposals/:id/accept/custom-json — re-issues the same custom_json
+ * acceptProposal returned, for retrying the Keychain broadcast when a
+ * proposal is already `accepted` but has no hive_tx_id yet (the client
+ * cancelled/lost the original broadcast). */
+export function getAcceptCustomJson(proposalId: string): Promise<{ custom_json: AcceptProposalResult["custom_json"] }> {
+  return apiFetch(`/api/v1/proposals/${encodeURIComponent(proposalId)}/accept/custom-json`);
+}
+
 export function confirmAcceptProposal(
   proposalId: string,
   hiveTxId: string,

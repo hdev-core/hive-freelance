@@ -156,7 +156,7 @@ export function JobDetailPage() {
             {id && (user?.role === "client" || user?.role === "both") && <ProposalsList jobId={id} />}
           </div>
 
-          <JobDetailSidebar job={job} />
+          <JobDetailSidebar job={job} onCancelled={setJob} />
         </div>
       )}
     </div>

@@ -114,7 +114,7 @@ export function SubmitProposalPage() {
         portfolio_links: links.length > 0 ? links : null,
         milestones: milestoneInputs,
       });
-      navigate(`../${id}`, { relative: "path" });
+      navigate("..", { relative: "path" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit proposal");
       setSubmitting(false);

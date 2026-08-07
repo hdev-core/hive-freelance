@@ -104,3 +104,13 @@ export function createJob(input: CreateJobInput): Promise<JobRow> {
     body: JSON.stringify(input),
   });
 }
+
+/** PATCH /jobs/:id — the only job-status transition exposed today (routes to
+ * cancelJob server-side). Only valid from "open" or "in_progress"; the
+ * server re-checks ownership and current status regardless of what the UI
+ * shows. */
+export function cancelJob(id: string): Promise<JobRow> {
+  return apiFetch<JobRow>(`/api/v1/jobs/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+  });
+}

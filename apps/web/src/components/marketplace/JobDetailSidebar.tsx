@@ -5,7 +5,7 @@ import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { LinkButton } from "../ui/LinkButton";
 import { ClientProfileSummary, type ClientProfileSummaryProps } from "./ClientProfileSummary";
-import type { JobDetailResponse } from "../../services/jobDetailService";
+import { cancelJob, type JobDetailResponse } from "../../services/jobDetailService";
 import { getProfileByUsername } from "../../services/profileService";
 import { listMyProposals } from "../../services/proposalsService";
 import { formatBudget } from "../../lib/formatBudget";
@@ -86,13 +86,36 @@ function useClientProfile(username: string): { data: ClientProfileSummaryProps |
   return { data, error };
 }
 
-export function JobDetailSidebar({ job }: { job: JobDetailResponse }) {
+export function JobDetailSidebar({
+  job,
+  onCancelled,
+}: {
+  job: JobDetailResponse;
+  onCancelled?: (job: JobDetailResponse) => void;
+}) {
   const { loading: sessionLoading, user } = useSession();
   const isLoggedIn = !sessionLoading && !!user;
   const isOwnJob = !!user && user.id === job.client_id;
   const isFreelancerRole = user?.role === "freelancer" || user?.role === "both";
   const alreadyApplied = useAlreadyApplied(job.id, isLoggedIn && !isOwnJob && isFreelancerRole);
   const clientProfile = useClientProfile(job.client_username);
+
+  const isCancellable = job.status === "open" || job.status === "in_progress";
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  async function handleCancel() {
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      const updated = await cancelJob(job.id);
+      onCancelled?.({ ...job, ...updated });
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : "Failed to cancel job");
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -102,9 +125,19 @@ export function JobDetailSidebar({ job }: { job: JobDetailResponse }) {
           <p className="mt-1 text-3xl font-bold text-success-text">{formatBudget(job.budget)}</p>
         </div>
         {isOwnJob ? (
-          <p className="rounded-lg bg-surface-muted p-3 text-xs text-text-secondary">
-            This is your job posting. Freelancers can apply once it's open for proposals.
-          </p>
+          <>
+            <p className="rounded-lg bg-surface-muted p-3 text-xs text-text-secondary">
+              This is your job posting. Freelancers can apply once it's open for proposals.
+            </p>
+            {isCancellable && (
+              <>
+                <Button variant="destructive" onClick={handleCancel} disabled={cancelling} className="w-full">
+                  {cancelling ? "Cancelling..." : "Cancel job"}
+                </Button>
+                {cancelError && <p className="text-xs text-accent">{cancelError}</p>}
+              </>
+            )}
+          </>
         ) : alreadyApplied ? (
           <>
             <Button disabled variant="secondary" className="w-full">
