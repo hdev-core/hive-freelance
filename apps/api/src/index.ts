@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import { closePrisma } from "@hive-freelance/db";
+import { closeHafPool } from "@hive-freelance/hive";
 import { errorHandler } from "./lib/errors.js";
 import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
@@ -60,6 +61,7 @@ const server = app.listen(port, () => {
 async function shutdown() {
   server.close();
   await closePrisma();
+  await closeHafPool();
   process.exit(0);
 }
 

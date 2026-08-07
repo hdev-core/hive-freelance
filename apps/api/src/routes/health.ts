@@ -90,8 +90,6 @@ healthRouter.get(
         err instanceof Error ? err.message : "HAF unavailable",
         "HAF_UNAVAILABLE",
       );
-    } finally {
-      await store.close().catch(() => undefined);
     }
   }),
 );

@@ -33,6 +33,7 @@ export {
 } from "./waxTx.js";
 
 export {
+  closeHafPool,
   createHafReadStore,
   isHafConfigured,
   type HafReadStoreOptions,

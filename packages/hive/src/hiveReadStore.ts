@@ -32,5 +32,9 @@ export interface HiveReadStore {
   getAccount(name: string): Promise<HafAccount | null>;
   getRecentAccountOps(name: string, limit?: number): Promise<HafOperation[]>;
   ping(): Promise<HafPingResult>;
+  /**
+   * No-op for the shared HAF store (`createHafReadStore`).
+   * End the process pool with `closeHafPool()` on API shutdown.
+   */
   close(): Promise<void>;
 }

@@ -12,6 +12,16 @@ export type HafReadStoreOptions = {
   connectionString?: string;
 };
 
+type HafPoolState = {
+  pool: pg.Pool;
+  connectionString: string;
+};
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __hafPool: HafPoolState | undefined;
+}
+
 function normalizeAccountName(name: string): string {
   return name.trim().replace(/^@+/, "").toLowerCase();
 }
@@ -24,6 +34,25 @@ function requireHafUrl(explicit?: string): string {
     );
   }
   return url;
+}
+
+function getSharedPool(connectionString: string): pg.Pool {
+  const existing = global.__hafPool;
+  if (existing) {
+    if (existing.connectionString !== connectionString) {
+      throw new Error(
+        "HAF pool already initialized with a different connection string",
+      );
+    }
+    return existing.pool;
+  }
+
+  const pool = new Pool({ connectionString, max: 5 });
+  const state: HafPoolState = { pool, connectionString };
+  // Always stash on globalThis so tsx/watch reloads reuse one pool (matches
+  // packages/db Prisma pattern in non-production; fine in production too).
+  global.__hafPool = state;
+  return pool;
 }
 
 function mapAccount(row: {
@@ -68,12 +97,14 @@ function mapOp(row: {
 
 /**
  * SQL reader against a HAF-compatible Postgres projection (`hafd` schema).
+ * Uses a process-scoped `pg.Pool` — call `closeHafPool()` on API shutdown.
+ * `HiveReadStore.close()` is a no-op so per-request teardown cannot kill the pool.
  */
 export function createHafReadStore(
   opts: HafReadStoreOptions = {},
 ): HiveReadStore {
   const connectionString = requireHafUrl(opts.connectionString);
-  const pool = new Pool({ connectionString, max: 5 });
+  const pool = getSharedPool(connectionString);
 
   return {
     async getAccount(name: string): Promise<HafAccount | null> {
@@ -143,9 +174,19 @@ export function createHafReadStore(
     },
 
     async close(): Promise<void> {
-      await pool.end();
+      // Shared process pool — use closeHafPool() on shutdown instead.
     },
   };
+}
+
+/**
+ * Ends the shared HAF pool (process shutdown). Safe if never opened.
+ */
+export async function closeHafPool(): Promise<void> {
+  const existing = global.__hafPool;
+  if (!existing) return;
+  global.__hafPool = undefined;
+  await existing.pool.end();
 }
 
 /** True when HAF_DATABASE_URL is present (does not open a connection). */

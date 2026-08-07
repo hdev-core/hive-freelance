@@ -52,8 +52,6 @@ hiveRouter.get(
         err instanceof Error ? err.message : "HAF read failed",
         "HAF_UNAVAILABLE",
       );
-    } finally {
-      await store.close().catch(() => undefined);
     }
   }),
 );
