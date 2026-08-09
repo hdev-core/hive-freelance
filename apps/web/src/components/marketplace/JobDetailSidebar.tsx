@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, XCircle } from "lucide-react";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
@@ -169,9 +169,21 @@ export function JobDetailSidebar({
           </>
         ) : (
           <>
-            <LinkButton to={isLoggedIn ? "apply" : "/login"} className="w-full">
-              Apply Now &rarr;
-            </LinkButton>
+            {job.status === "cancelled" ? (
+              <Button disabled variant="secondary" className="w-full">
+                <XCircle size={16} />
+                Cancelled
+              </Button>
+            ) : job.status === "in_progress" ? (
+              <Button disabled variant="secondary" className="w-full">
+                <Clock size={16} />
+                In Progress
+              </Button>
+            ) : (
+              <LinkButton to={isLoggedIn ? "apply" : "/login"} className="w-full">
+                Apply Now &rarr;
+              </LinkButton>
+            )}
             <LinkButton
               to={isLoggedIn ? "../../messages" : "/login"}
               relative={isLoggedIn ? "path" : undefined}

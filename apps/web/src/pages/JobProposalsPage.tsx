@@ -285,7 +285,7 @@ export function JobProposalsPage() {
               onAccept={() => handleAccept(proposal.id)}
               onReject={() => handleReject(proposal.id)}
               onConfirm={() => handleConfirmOnChain(proposal.id)}
-              busy={busyId === proposal.id}
+              busy={busyId !== null}
             />
           ))}
         </div>
