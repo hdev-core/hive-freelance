@@ -18,7 +18,8 @@ export type StatusBadgeStatus =
   | "suspended"
   | "open"
   | "in_progress"
-  | "completed";
+  | "completed"
+  | "cancelled";
 
 const statusConfig: Record<StatusBadgeStatus, { label: string; icon?: LucideIcon; className: string }> = {
   escrow_funded: {
@@ -53,6 +54,14 @@ const statusConfig: Record<StatusBadgeStatus, { label: string; icon?: LucideIcon
     label: "Completed",
     icon: CheckCircle2,
     className: "bg-success-bg text-success-text",
+  },
+  // Minimal, non-crashing treatment only — matches the neutral open/active
+  // styling rather than inventing new visual language. A dedicated
+  // cancelled look (if wanted) is a design call, not something to guess
+  // at here; flagged in the PR.
+  cancelled: {
+    label: "Cancelled",
+    className: "border border-border bg-surface-muted text-text-secondary",
   },
 };
 

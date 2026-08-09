@@ -12,7 +12,7 @@
  * below for exactly what's guessed and why.
  */
 
-export type JobStatus = "open" | "in_progress" | "completed";
+export type JobStatus = "open" | "in_progress" | "completed" | "cancelled";
 
 /** Matches JobRow from packages/db/src/types.ts exactly — this is the real API shape. */
 export type JobRow = {
