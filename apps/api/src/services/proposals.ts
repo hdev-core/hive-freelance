@@ -4,10 +4,14 @@ import {
   isUniqueViolation,
   toContractRow,
   toProposalRow,
+  toProposalMilestoneRow,
+  toMilestoneRow,
   type Prisma,
 } from "@hive-freelance/db";
 import { AppError } from "../lib/errors.js";
 import { getJob } from "./jobs.js";
+
+const milestonesOrder = { orderBy: { milestoneOrder: "asc" as const } };
 
 export async function listProposalsForJob(jobId: string, clientId: string) {
   const job = await getJob(jobId);
@@ -16,15 +20,104 @@ export async function listProposalsForJob(jobId: string, clientId: string) {
   }
   const proposals = await prisma.proposal.findMany({
     where: { jobId: BigInt(jobId) },
+    include: {
+      milestones: milestonesOrder,
+      freelancer: {
+        select: {
+          hiveUsername: true,
+          profile: { select: { displayName: true, avatarUrl: true, skills: true } },
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
-  return proposals.map(toProposalRow);
+
+  // Batched rating aggregate, same pattern as listJobs's client_rating: one
+  // groupBy for every freelancer on this job instead of one query per card.
+  const freelancerIds = [...new Set(proposals.map((p) => p.freelancerId))];
+  const ratings = freelancerIds.length
+    ? await prisma.review.groupBy({
+        by: ["revieweeId"],
+        where: { revieweeId: { in: freelancerIds } },
+        _avg: { rating: true },
+        _count: { rating: true },
+      })
+    : [];
+  const ratingByFreelancerId = new Map(
+    ratings.map((r) => [r.revieweeId.toString(), { average: r._avg.rating, count: r._count.rating }]),
+  );
+
+  return proposals.map((p) => {
+    const rating = ratingByFreelancerId.get(p.freelancerId.toString()) ?? { average: null, count: 0 };
+    return {
+      ...toProposalRow(p),
+      milestones: p.milestones.map(toProposalMilestoneRow),
+      freelancer_username: p.freelancer.hiveUsername,
+      freelancer_display_name: p.freelancer.profile?.displayName ?? null,
+      freelancer_avatar_url: p.freelancer.profile?.avatarUrl ?? null,
+      // Real Profile.skills, first entry only — there is no headline/title
+      // field on Profile, so a single skill tag stands in for the
+      // freelancer's "role" line instead of inventing one.
+      freelancer_top_skill: p.freelancer.profile?.skills?.[0] ?? null,
+      freelancer_rating: {
+        average: rating.average != null ? Math.round(rating.average * 100) / 100 : null,
+        count: rating.count,
+      },
+    };
+  });
 }
+
+/**
+ * The freelancer's own proposals across every job, every status — unlike
+ * getDashboard's pendingProposals (pending-only, capped at 50, built for the
+ * dashboard overview widget), this is a full listing for the "My Proposals"
+ * page. Always scoped to the caller; there's no cross-user case.
+ */
+export async function listMyProposals(freelancerId: string) {
+  const proposals = await prisma.proposal.findMany({
+    where: { freelancerId: BigInt(freelancerId) },
+    include: {
+      job: { select: { title: true, status: true } },
+      milestones: milestonesOrder,
+      // Only present once a proposal has been accepted and promoted into a
+      // Contract — null for pending/rejected proposals. contract_milestones
+      // uses the real, 5-state Milestone model (pending/funded/submitted/
+      // approved/released), not the proposal-stage ProposalMilestone rows,
+      // which have no status at all.
+      contract: {
+        include: { milestones: { orderBy: { milestoneOrder: "asc" as const } } },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+
+  return proposals.map((p) => ({
+    ...toProposalRow(p),
+    job_title: p.job.title,
+    job_status: p.job.status,
+    milestones: p.milestones.map(toProposalMilestoneRow),
+    contract_milestones: p.contract ? p.contract.milestones.map(toMilestoneRow) : null,
+  }));
+}
+
+export type SubmitProposalMilestoneInput = {
+  title: string;
+  amount: number;
+  duration: string;
+};
 
 export async function submitProposal(
   jobId: string,
   freelancerId: string,
-  data: { cover_letter: string; bid_amount: number },
+  data: {
+    cover_letter: string;
+    bid_amount: number;
+    estimated_duration?: string | null;
+    available_to_start?: string | null;
+    portfolio_links?: { title: string; url: string }[] | null;
+    milestones: SubmitProposalMilestoneInput[];
+  },
 ) {
   const job = await getJob(jobId);
   if (job.status !== "open") {
@@ -34,6 +127,18 @@ export async function submitProposal(
     throw new AppError(403, "Cannot propose on your own job");
   }
 
+  // Milestone amounts are the bid's breakdown — they must add up to exactly
+  // what the client sees as the total bid, same rule the mockup's sidebar
+  // total enforces client-side.
+  const milestoneTotal = data.milestones.reduce((sum, m) => sum + m.amount, 0);
+  if (Math.round(milestoneTotal * 100) !== Math.round(data.bid_amount * 100)) {
+    throw new AppError(
+      400,
+      "Milestone amounts must sum to the bid amount",
+      "MILESTONE_SUM_MISMATCH",
+    );
+  }
+
   try {
     const proposal = await prisma.proposal.create({
       data: {
@@ -41,9 +146,24 @@ export async function submitProposal(
         freelancerId: BigInt(freelancerId),
         coverLetter: data.cover_letter,
         bidAmount: data.bid_amount,
+        estimatedDuration: data.estimated_duration ?? null,
+        availableToStart: data.available_to_start ?? null,
+        portfolioLinks: data.portfolio_links ?? undefined,
+        milestones: {
+          create: data.milestones.map((m, i) => ({
+            title: m.title,
+            amount: m.amount,
+            duration: m.duration,
+            milestoneOrder: i,
+          })),
+        },
       },
+      include: { milestones: milestonesOrder },
     });
-    return toProposalRow(proposal);
+    return {
+      ...toProposalRow(proposal),
+      milestones: proposal.milestones.map(toProposalMilestoneRow),
+    };
   } catch (err) {
     if (isUniqueViolation(err)) {
       throw new AppError(409, "Already proposed on this job");
@@ -90,6 +210,34 @@ export async function rejectProposal(proposalId: string, clientId: string) {
   return toProposalRow(updated);
 }
 
+/** Shared by acceptProposal (fresh contract) and getAcceptCustomJson (retry
+ * after a dropped/cancelled Keychain broadcast) so both send byte-identical
+ * custom_json for the same contract. */
+function buildContractCreatedCustomJson(contract: {
+  id: bigint;
+  jobId: bigint;
+  proposalId: bigint;
+  clientId: bigint;
+  freelancerId: bigint;
+  totalAmount: Prisma.Decimal;
+}) {
+  return {
+    id: APP_ID,
+    json: JSON.stringify({
+      app_id: APP_ID,
+      type: "contract_created",
+      contract_id: contract.id.toString(),
+      job_id: contract.jobId.toString(),
+      proposal_id: contract.proposalId.toString(),
+      client_id: contract.clientId.toString(),
+      freelancer_id: contract.freelancerId.toString(),
+      total_amount: contract.totalAmount.toString(),
+    }),
+    required_auths: [] as string[],
+    required_posting_auths: [] as string[], // filled by client username on broadcast
+  };
+}
+
 /**
  * Preserves the original's pessimistic locking: two clients accepting
  * different proposals on the same job at the same instant must not both
@@ -103,6 +251,12 @@ export async function rejectProposal(proposalId: string, clientId: string) {
 export async function acceptProposal(proposalId: string, clientId: string) {
   const contract = await prisma.$transaction(
     async (tx) => {
+      // Job is locked in the same query as the proposal (not a separate
+      // findUnique after) — otherwise a concurrent cancelJob could commit
+      // between the two reads and this transaction would still write the
+      // job back to "in_progress" over it, or two accepts on different
+      // proposals for the same job could both pass the status check (only
+      // Contract.proposalId is unique, not jobId).
       const locked = await tx.$queryRaw<
         {
           id: bigint;
@@ -110,14 +264,39 @@ export async function acceptProposal(proposalId: string, clientId: string) {
           freelancer_id: bigint;
           bid_amount: Prisma.Decimal;
           status: string;
+          job_status: string;
+          job_client_id: bigint;
         }[]
-      >`SELECT id, job_id, freelancer_id, bid_amount, status FROM proposals WHERE id = ${BigInt(proposalId)} FOR UPDATE`;
+      >`SELECT proposals.id, proposals.job_id, proposals.freelancer_id, proposals.bid_amount, proposals.status,
+               jobs.status AS job_status, jobs.client_id AS job_client_id
+        FROM proposals
+        JOIN jobs ON jobs.id = proposals.job_id
+        WHERE proposals.id = ${BigInt(proposalId)}
+        FOR UPDATE OF proposals, jobs`;
 
-      const proposal = locked[0];
-      if (!proposal) throw new AppError(404, "Proposal not found");
+      const row = locked[0];
+      if (!row) throw new AppError(404, "Proposal not found");
+      const proposal = {
+        id: row.id,
+        job_id: row.job_id,
+        freelancer_id: row.freelancer_id,
+        bid_amount: row.bid_amount,
+        status: row.status,
+      };
+      const job = { status: row.job_status, clientId: row.job_client_id };
 
-      const job = await tx.job.findUnique({ where: { id: proposal.job_id } });
-      if (!job) throw new AppError(404, "Job not found");
+      // Not part of the FOR UPDATE lock above: proposal milestones are
+      // written once at submitProposal and never mutated afterward (no
+      // edit-proposal endpoint exists), so there's nothing concurrent to
+      // guard against here — a plain typed read is enough.
+      const proposalMilestones = await tx.proposalMilestone.findMany({
+        where: { proposalId: proposal.id },
+        orderBy: { milestoneOrder: "asc" },
+      });
+
+      if (job.status !== "open") {
+        throw new AppError(409, "This job is no longer open.");
+      }
       if (job.clientId.toString() !== clientId) {
         throw new AppError(403, "Only the job client can accept");
       }
@@ -149,7 +328,7 @@ export async function acceptProposal(proposalId: string, clientId: string) {
         data: { status: "in_progress" },
       });
 
-      return tx.contract.create({
+      const contract = await tx.contract.create({
         data: {
           jobId: proposal.job_id,
           proposalId: proposal.id,
@@ -160,30 +339,41 @@ export async function acceptProposal(proposalId: string, clientId: string) {
           startDate: new Date(),
         },
       });
+
+      // Promote proposal-stage milestones into real, trackable rows on the
+      // new contract. Only title/amount/order carry over — `duration` is
+      // deliberately dropped: it's proposal-stage-only, non-binding
+      // information, and the real Milestone table has no field for it (see
+      // ProposalMilestone's model comment in schema.prisma). createMany is
+      // one extra round-trip regardless of milestone count, same reasoning
+      // as the timeout comment below — six round-trips became seven.
+      if (proposalMilestones.length > 0) {
+        await tx.milestone.createMany({
+          data: proposalMilestones.map((m) => ({
+            contractId: contract.id,
+            title: m.title,
+            amount: m.amount,
+            milestoneOrder: m.milestoneOrder,
+          })),
+        });
+      }
+
+      return contract;
     },
     // Default is 5000ms — observed real-world latency through the pooled
     // connection came in at ~5.5s for this transaction's six round-trips,
     // tripping the default and closing the transaction before the final
     // statement ran. Six small statements shouldn't need 15s of DB work;
     // this headroom is for connection/pooler latency, not query cost.
+    // Still 15000ms after adding the milestone lookup/promotion (two more
+    // round-trips, one read + one batched write) — headroom was sized for
+    // pooler/connection latency, not per-statement query cost, so it has
+    // slack for this. Revisit if proposals start carrying many more
+    // milestones than the UI's current handful.
     { timeout: 15000 },
   );
 
-  const custom_json = {
-    id: APP_ID,
-    json: JSON.stringify({
-      app_id: APP_ID,
-      type: "contract_created",
-      contract_id: contract.id.toString(),
-      job_id: contract.jobId.toString(),
-      proposal_id: contract.proposalId.toString(),
-      client_id: contract.clientId.toString(),
-      freelancer_id: contract.freelancerId.toString(),
-      total_amount: contract.totalAmount.toString(),
-    }),
-    required_auths: [],
-    required_posting_auths: [], // filled by client username on broadcast
-  };
+  const custom_json = buildContractCreatedCustomJson(contract);
 
   return { contract: toContractRow(contract), custom_json };
 }
@@ -215,4 +405,37 @@ export async function confirmAccept(
     data: { hiveTxId },
   });
   return toContractRow(updated);
+}
+
+/**
+ * Re-issues the same custom_json acceptProposal already returned, for the
+ * "accepted but the client cancelled/lost the Keychain broadcast" dead end:
+ * the contract row already exists with no hive_tx_id, so this can't call
+ * acceptProposal again (proposal is no longer `pending`) — it just hands
+ * back the payload to retry the broadcast + confirmAccept with.
+ */
+export async function getAcceptCustomJson(proposalId: string, clientId: string) {
+  // Ownership is checked before anything else about the proposal's state is
+  // revealed — otherwise any authenticated client could probe proposal IDs
+  // and learn whether they're accepted/confirmed before being rejected.
+  const contract = await prisma.contract.findUnique({
+    where: { proposalId: BigInt(proposalId) },
+  });
+  if (!contract) throw new AppError(404, "Contract not found");
+  if (contract.clientId.toString() !== clientId) {
+    throw new AppError(403, "Only the client can confirm");
+  }
+
+  const proposal = await prisma.proposal.findUnique({
+    where: { id: BigInt(proposalId) },
+  });
+  if (!proposal) throw new AppError(404, "Proposal not found");
+  if (proposal.status !== "accepted") {
+    throw new AppError(400, "Proposal is not accepted");
+  }
+  if (proposal.hiveTxId) {
+    throw new AppError(400, "Proposal is already confirmed on-chain");
+  }
+
+  return { custom_json: buildContractCreatedCustomJson(contract) };
 }

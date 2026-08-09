@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler, AppError } from "../lib/errors.js";
 import { param } from "../lib/params.js";
-import { requireAuth, requireClient } from "../middleware/auth.js";
+import { optionalAuth, requireAuth, requireClient } from "../middleware/auth.js";
 import {
   cancelJob,
   createJob,
@@ -34,6 +34,7 @@ function positiveNumberQueryParam(
 
 jobsRouter.get(
   "/",
+  optionalAuth,
   asyncHandler(async (req, res) => {
     const budget_min = positiveNumberQueryParam(
       req.query.budget_min,
@@ -46,14 +47,35 @@ jobsRouter.get(
     if (budget_min != null && budget_max != null && budget_min > budget_max) {
       throw new AppError(400, "budget_min cannot be greater than budget_max");
     }
+    const client_id = req.query.client_id
+      ? String(req.query.client_id)
+      : undefined;
+    if (client_id != null && !/^\d+$/.test(client_id)) {
+      throw new AppError(400, "client_id must be a positive integer");
+    }
+    // client_id filter drops the open-only default (see listJobs), which
+    // would otherwise let anyone enumerate a client's non-open jobs with no
+    // auth at all. Require the caller to be that same client.
+    if (client_id != null) {
+      if (!req.user) {
+        throw new AppError(401, "Authentication required", "UNAUTHORIZED");
+      }
+      if (req.user.id !== client_id) {
+        throw new AppError(403, "Cannot view another client's jobs");
+      }
+    }
     const data = await listJobs({
       category: req.query.category
         ? String(req.query.category)
         : undefined,
       skill: req.query.skill ? String(req.query.skill) : undefined,
+      // Only defaulted to "open" for the public browse case — a client_id
+      // filter means "my posted jobs," which should show every status.
+      // See listJobs' own status-defaulting for the client_id branch.
       status: req.query.status
         ? jobStatusSchema.parse(req.query.status)
-        : "open",
+        : undefined,
+      client_id,
       budget_min,
       budget_max,
       page: req.query.page ? Number(req.query.page) : 1,

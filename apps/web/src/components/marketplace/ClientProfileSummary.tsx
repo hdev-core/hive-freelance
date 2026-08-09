@@ -1,15 +1,12 @@
-import { Star, BadgeCheck } from "lucide-react";
+import { Calendar, MapPin, Star } from "lucide-react";
 import { Avatar } from "../ui/Avatar";
-import { Badge } from "../ui/Badge";
 
 export type ClientProfileSummaryProps = {
   name: string;
   rating: number;
   reviewCount: number;
   location: string;
-  totalSpent: string;
   memberSince: string;
-  verified: boolean;
 };
 
 export function ClientProfileSummary({
@@ -17,19 +14,14 @@ export function ClientProfileSummary({
   rating,
   reviewCount,
   location,
-  totalSpent,
   memberSince,
-  verified,
 }: ClientProfileSummaryProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
         <Avatar name={name} size="lg" />
         <div>
-          <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-text-primary">{name}</span>
-            {verified && <BadgeCheck size={16} className="text-accent" aria-label="Verified" />}
-          </div>
+          <span className="font-semibold text-text-primary">{name}</span>
           {reviewCount > 0 && (
             <div className="flex items-center gap-1 text-sm text-text-secondary">
               <Star size={14} className="fill-accent text-accent" />
@@ -42,22 +34,18 @@ export function ClientProfileSummary({
       </div>
       <dl className="flex flex-col gap-2 text-sm">
         <div className="flex items-center justify-between">
-          <dt className="text-text-secondary">Location</dt>
+          <dt className="flex items-center gap-1.5 text-text-secondary">
+            <MapPin size={14} className="shrink-0" />
+            Location
+          </dt>
           <dd className="font-medium text-text-primary">{location}</dd>
         </div>
         <div className="flex items-center justify-between">
-          <dt className="text-text-secondary">Total spent</dt>
-          <dd className="font-medium text-text-primary">{totalSpent}</dd>
-        </div>
-        <div className="flex items-center justify-between">
-          <dt className="text-text-secondary">Member since</dt>
+          <dt className="flex items-center gap-1.5 text-text-secondary">
+            <Calendar size={14} className="shrink-0" />
+            Member since
+          </dt>
           <dd className="font-medium text-text-primary">{memberSince}</dd>
-        </div>
-        <div className="flex items-center justify-between">
-          <dt className="text-text-secondary">Identity</dt>
-          <dd>
-            <Badge variant={verified ? "success" : "neutral"}>{verified ? "Verified" : "Unverified"}</Badge>
-          </dd>
         </div>
       </dl>
     </div>

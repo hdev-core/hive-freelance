@@ -95,25 +95,56 @@ model Job {
 }
 
 model Proposal {
-  id           BigInt   @id @default(autoincrement())
-  jobId        BigInt   @map("job_id")
-  freelancerId BigInt   @map("freelancer_id")
-  coverLetter  String   @map("cover_letter")
-  bidAmount    Decimal  @map("bid_amount") @db.Decimal(10, 2)
-  status       String   @default("pending")
-  hiveTxId     String?  @map("hive_tx_id")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @default(now()) @map("updated_at")
+  id                BigInt   @id @default(autoincrement())
+  jobId             BigInt   @map("job_id")
+  freelancerId      BigInt   @map("freelancer_id")
+  coverLetter       String   @map("cover_letter")
+  bidAmount         Decimal  @map("bid_amount") @db.Decimal(10, 2)
+  status            String   @default("pending")
+  hiveTxId          String?  @map("hive_tx_id")
+  // Proposal-stage-only fields below: free text, not enforced/tracked once
+  // a contract is created. See ProposalMilestone for why duration in
+  // particular doesn't carry forward.
+  estimatedDuration String?  @map("estimated_duration")
+  availableToStart  String?  @map("available_to_start")
+  portfolioLinks    Json?    @map("portfolio_links")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @default(now()) @map("updated_at")
 
-  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  freelancer User      @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
+  job        Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  freelancer User                @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
   contract   Contract?
+  milestones ProposalMilestone[]
 
   @@unique([jobId, freelancerId], map: "uq_proposals_job_freelancer")
   @@index([jobId])
   @@index([freelancerId])
   @@index([status])
   @@map("proposals")
+}
+
+/**
+ * Proposal-stage milestone breakdown (title/amount/duration + ordering).
+ * Amounts must sum to the parent proposal's bid_amount — enforced in
+ * services/proposals.ts, not here (cross-row check, not a single CHECK
+ * constraint). At accept time, title/amount/milestoneOrder are promoted
+ * into real Milestone rows on the new Contract; `duration` is deliberately
+ * NOT carried forward — the real Milestone table has no field for it, and
+ * it's proposal-stage-only, non-binding information. See RECONCILIATION.md
+ * before adding a duration column to Milestone instead of dropping it here.
+ */
+model ProposalMilestone {
+  id             BigInt  @id @default(autoincrement())
+  proposalId     BigInt  @map("proposal_id")
+  title          String
+  amount         Decimal @db.Decimal(10, 2)
+  duration       String
+  milestoneOrder Int     @map("milestone_order")
+
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
+  @@map("proposal_milestones")
 }
 
 model Contract {

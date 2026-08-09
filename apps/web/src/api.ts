@@ -31,6 +31,11 @@ export async function apiFetch<T>(
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     credentials: "include",
+    // Belt-and-suspenders alongside the API's Cache-Control: no-store —
+    // every request here is auth/session-dependent, so the browser must
+    // never reuse a cached response after the session cookie changes (e.g.
+    // switching Hive accounts).
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),

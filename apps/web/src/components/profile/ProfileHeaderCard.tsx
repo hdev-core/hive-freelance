@@ -34,8 +34,13 @@ export function ProfileHeaderCard({
    * "both" (not a valid URL segment). Needed as an absolute path because
    * this card renders at both /:role/profile and /:role/profile/:username;
    * a relative "edit" resolves to .../:username/edit from the latter,
-   * which isn't a route. */
-  role: DashboardRole;
+   * which isn't a route. Undefined when rendered from the public,
+   * no-login-required /profile/:username route (no DashboardLayout, so no
+   * role to derive) — isOwnProfile is only ever true there if a logged-in
+   * user happens to land on their own public link, and even then we just
+   * skip the edit affordance rather than guess which dashboard to send
+   * them to. */
+  role?: DashboardRole;
 }) {
   const p = profile.profile;
   const displayName = p?.display_name ?? profile.hiveUsername;
@@ -60,7 +65,7 @@ export function ProfileHeaderCard({
             size="xl"
             className="border-4 border-surface"
           />
-          {isOwnProfile && (
+          {isOwnProfile && role && (
             <LinkButton to={`/${role}/profile/edit`} variant="outline" size="sm" className="mb-1">
               <Pencil size={14} />
               Edit profile
