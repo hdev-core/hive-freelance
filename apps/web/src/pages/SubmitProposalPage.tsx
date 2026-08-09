@@ -53,7 +53,12 @@ export function SubmitProposalPage() {
     };
   }, [id]);
 
-  const bidAmount = milestones.reduce((sum, m) => sum + (Number(m.amount) || 0), 0);
+  const bidAmountRaw = milestones.reduce((sum, m) => sum + (Number(m.amount) || 0), 0);
+  // Float addition of clean 2-decimal milestone amounts can land on values
+  // like 5116.789999999999 instead of 5116.79 — round to cents before this
+  // is used for display or sent as bid_amount, so it matches the server's
+  // cent-precision check exactly instead of failing on float representation.
+  const bidAmount = Math.round(bidAmountRaw * 100) / 100;
   const serviceFee = bidAmount * SERVICE_FEE_RATE;
   const payout = bidAmount - serviceFee;
 

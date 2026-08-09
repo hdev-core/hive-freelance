@@ -251,6 +251,12 @@ function buildContractCreatedCustomJson(contract: {
 export async function acceptProposal(proposalId: string, clientId: string) {
   const contract = await prisma.$transaction(
     async (tx) => {
+      // Job is locked in the same query as the proposal (not a separate
+      // findUnique after) — otherwise a concurrent cancelJob could commit
+      // between the two reads and this transaction would still write the
+      // job back to "in_progress" over it, or two accepts on different
+      // proposals for the same job could both pass the status check (only
+      // Contract.proposalId is unique, not jobId).
       const locked = await tx.$queryRaw<
         {
           id: bigint;
@@ -258,11 +264,26 @@ export async function acceptProposal(proposalId: string, clientId: string) {
           freelancer_id: bigint;
           bid_amount: Prisma.Decimal;
           status: string;
+          job_status: string;
+          job_client_id: bigint;
         }[]
-      >`SELECT id, job_id, freelancer_id, bid_amount, status FROM proposals WHERE id = ${BigInt(proposalId)} FOR UPDATE`;
+      >`SELECT proposals.id, proposals.job_id, proposals.freelancer_id, proposals.bid_amount, proposals.status,
+               jobs.status AS job_status, jobs.client_id AS job_client_id
+        FROM proposals
+        JOIN jobs ON jobs.id = proposals.job_id
+        WHERE proposals.id = ${BigInt(proposalId)}
+        FOR UPDATE OF proposals, jobs`;
 
-      const proposal = locked[0];
-      if (!proposal) throw new AppError(404, "Proposal not found");
+      const row = locked[0];
+      if (!row) throw new AppError(404, "Proposal not found");
+      const proposal = {
+        id: row.id,
+        job_id: row.job_id,
+        freelancer_id: row.freelancer_id,
+        bid_amount: row.bid_amount,
+        status: row.status,
+      };
+      const job = { status: row.job_status, clientId: row.job_client_id };
 
       // Not part of the FOR UPDATE lock above: proposal milestones are
       // written once at submitProposal and never mutated afterward (no
@@ -273,8 +294,6 @@ export async function acceptProposal(proposalId: string, clientId: string) {
         orderBy: { milestoneOrder: "asc" },
       });
 
-      const job = await tx.job.findUnique({ where: { id: proposal.job_id } });
-      if (!job) throw new AppError(404, "Job not found");
       if (job.status !== "open") {
         throw new AppError(409, "This job is no longer open.");
       }
@@ -396,6 +415,17 @@ export async function confirmAccept(
  * back the payload to retry the broadcast + confirmAccept with.
  */
 export async function getAcceptCustomJson(proposalId: string, clientId: string) {
+  // Ownership is checked before anything else about the proposal's state is
+  // revealed — otherwise any authenticated client could probe proposal IDs
+  // and learn whether they're accepted/confirmed before being rejected.
+  const contract = await prisma.contract.findUnique({
+    where: { proposalId: BigInt(proposalId) },
+  });
+  if (!contract) throw new AppError(404, "Contract not found");
+  if (contract.clientId.toString() !== clientId) {
+    throw new AppError(403, "Only the client can confirm");
+  }
+
   const proposal = await prisma.proposal.findUnique({
     where: { id: BigInt(proposalId) },
   });
@@ -405,14 +435,6 @@ export async function getAcceptCustomJson(proposalId: string, clientId: string) 
   }
   if (proposal.hiveTxId) {
     throw new AppError(400, "Proposal is already confirmed on-chain");
-  }
-
-  const contract = await prisma.contract.findUnique({
-    where: { proposalId: BigInt(proposalId) },
-  });
-  if (!contract) throw new AppError(404, "Contract not found");
-  if (contract.clientId.toString() !== clientId) {
-    throw new AppError(403, "Only the client can confirm");
   }
 
   return { custom_json: buildContractCreatedCustomJson(contract) };

@@ -63,9 +63,25 @@ const portfolioLinkSchema = z.object({
   url: httpUrl,
 });
 
+/**
+ * .multipleOf(0.01) is too strict here: it's driven by how many decimal
+ * digits the float's own string representation has, so a clean 2-decimal
+ * sum that lands on something like 5116.789999999999 due to float addition
+ * gets rejected even though it rounds cleanly to a real cent value. This
+ * accepts anything that round-trips to the same number after rounding to
+ * cents, which still rejects genuine sub-cent precision (e.g. 100.005).
+ */
+const centsAmount = z
+  .number()
+  .positive()
+  .max(99_999_999.99)
+  .refine((v) => Math.round(v * 100) / 100 === v, {
+    message: "Amount must not have more than 2 decimal places",
+  });
+
 const proposalMilestoneSchema = z.object({
   title: z.string().min(1).max(200),
-  amount: z.number().positive().max(99_999_999.99).multipleOf(0.01),
+  amount: centsAmount,
   duration: z.string().min(1).max(50),
 });
 
@@ -77,7 +93,7 @@ jobProposalsRouter.post(
     const body = z
       .object({
         cover_letter: z.string().min(1),
-        bid_amount: z.number().positive().max(99_999_999.99).multipleOf(0.01),
+        bid_amount: centsAmount,
         estimated_duration: z.string().max(50).nullable().optional(),
         available_to_start: z.string().max(50).nullable().optional(),
         portfolio_links: z.array(portfolioLinkSchema).max(10).nullable().optional(),

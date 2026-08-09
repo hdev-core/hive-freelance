@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { LinkButton } from "../ui/LinkButton";
 import { ClientProfileSummary, type ClientProfileSummaryProps } from "./ClientProfileSummary";
 import { cancelJob, type JobDetailResponse } from "../../services/jobDetailService";
@@ -103,8 +104,10 @@ export function JobDetailSidebar({
   const isCancellable = job.status === "open" || job.status === "in_progress";
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  async function handleCancel() {
+  async function performCancel() {
+    setConfirmOpen(false);
     setCancelling(true);
     setCancelError(null);
     try {
@@ -131,11 +134,22 @@ export function JobDetailSidebar({
             </p>
             {isCancellable && (
               <>
-                <Button variant="destructive" onClick={handleCancel} disabled={cancelling} className="w-full">
+                <Button
+                  variant="destructive"
+                  onClick={() => setConfirmOpen(true)}
+                  disabled={cancelling}
+                  className="w-full"
+                >
                   {cancelling ? "Cancelling..." : "Cancel job"}
                 </Button>
                 {cancelError && <p className="text-xs text-accent">{cancelError}</p>}
               </>
+            )}
+            {job.status === "cancelled" && (
+              <Button disabled variant="secondary" className="w-full">
+                <XCircle size={16} />
+                Cancelled
+              </Button>
             )}
           </>
         ) : alreadyApplied ? (
@@ -193,6 +207,17 @@ export function JobDetailSidebar({
           <p className="text-xs text-text-muted">{clientProfile.error ?? "Loading client profile..."}</p>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Cancel this job?"
+        description="This can't be undone. The job will no longer accept proposals."
+        confirmLabel="Cancel job"
+        cancelLabel="Keep job"
+        busy={cancelling}
+        onConfirm={performCancel}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }
