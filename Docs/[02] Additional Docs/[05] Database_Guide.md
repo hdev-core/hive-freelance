@@ -16,7 +16,7 @@ Related: [`[04] Local_Development_Guide.md`](./[04]%20Local_Development_Guide.md
 | Engine | PostgreSQL 16 (Docker Compose) |
 | Database name | `hive_freelance` |
 | Access from apps | `DATABASE_URL` in `.env` |
-| Migrations | Versioned SQL in `packages/db/migrations` |
+| Migrations | Prisma migrations in `packages/db/prisma/migrations` |
 | TypeScript types | `@hive-freelance/db` → `packages/db/src/types.ts` |
 | ORM | None — raw `pg` pool + SQL |
 
@@ -58,10 +58,11 @@ Use DBeaver, pgAdmin, TablePlus, or a Cursor/VS Code Postgres extension with the
 
 | File | What it creates |
 |------|-----------------|
-| [`001_bootstrap.sql`](../../packages/db/migrations/001_bootstrap.sql) | `schema_migrations`, `users`, `oauth_accounts`, `hive_records`, `listener_state` |
-| [`002_marketplace_schema.sql`](../../packages/db/migrations/002_marketplace_schema.sql) | `profiles`, `jobs`, `proposals`, `contracts`, `milestones`, `payments`, `disputes`, `reviews` + `updated_at` triggers |
+| [`20260720064522_init`](../../packages/db/prisma/migrations/20260720064522_init) | Core tables (`users`, `oauth_accounts`, `hive_records`, `listener_state`, marketplace) |
+| [`20260720064859_add_constraints_and_triggers`](../../packages/db/prisma/migrations/20260720064859_add_constraints_and_triggers) | Constraints + triggers |
+| Later dated folders under `prisma/migrations` | Profile fields, job status, etc. |
 
-Runner: `packages/db/src/migrate.ts` — applies each `*.sql` once and records the filename in `schema_migrations`.
+Runner: `npm run db:migrate` (Prisma).
 
 ```bash
 npm run db:migrate

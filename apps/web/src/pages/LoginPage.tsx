@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { CheckCircle2, Circle, KeyRound, Lock, ShieldCheck } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { apiFetch } from "../api";
+import { useAuth } from "../auth/AuthProvider";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Select } from "../components/ui/Select";
@@ -24,6 +25,21 @@ type AuthResponse = {
 type Me = {
   user: { username: string; role: UserRole };
 };
+
+/** Strip @ / spaces; lowercase — matches API normalizeHiveUsername. */
+function normalizeHiveUsername(username: string): string {
+  return username.trim().replace(/^@+/, "").toLowerCase();
+}
+
+function isValidHiveUsernameClient(username: string): boolean {
+  const name = normalizeHiveUsername(username);
+  if (!name) return false;
+  const segment = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+  return name.split(".").every((part) => {
+    if (part.length < 3 || part.length > 16) return false;
+    return segment.test(part);
+  });
+}
 
 function googleErrorMessage(code: string): string {
   switch (code) {
@@ -107,10 +123,10 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { showToast } = useToast();
+  const { refresh } = useAuth();
   const [username, setUsername] = useState("");
   const [role, setRole] = useState<Role>("client");
   const [status, setStatus] = useState("Idle");
-  const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [googleReturnFailed, setGoogleReturnFailed] = useState(false);
   const handledGoogleReturn = useRef(false);
@@ -124,7 +140,7 @@ export function LoginPage() {
   useEffect(() => {
     const googleError = params.get("google_error");
     if (googleError) {
-      setError(googleErrorMessage(googleError));
+      showToast(googleErrorMessage(googleError), "error");
       navigate("/login", { replace: true });
       return;
     }
@@ -134,7 +150,8 @@ export function LoginPage() {
     if (handledGoogleReturn.current) return;
     handledGoogleReturn.current = true;
     void apiFetch<Me>("/api/v1/auth/me")
-      .then((r) => {
+      .then(async (r) => {
+        await refresh();
         showToast(
           params.get("provisioned") === "1"
             ? "Google account created — signed in"
@@ -143,21 +160,27 @@ export function LoginPage() {
         navigate(dashboardPathForRole(r.user.role));
       })
       .catch(() => {
-        setError("Google sign-in didn't complete. Please try again.");
+        showToast("Google sign-in didn't complete. Please try again.", "error");
         setGoogleReturnFailed(true);
       });
-  }, [params, navigate, showToast]);
+  }, [params, navigate, showToast, refresh]);
 
   async function keychainLogin(e: FormEvent) {
     e.preventDefault();
-    setError(null);
-    const u = username.trim().toLowerCase();
+    const u = normalizeHiveUsername(username);
     if (!u) {
-      setError("Enter a Hive username");
+      showToast("Enter a Hive username", "error");
+      return;
+    }
+    if (!isValidHiveUsernameClient(u)) {
+      showToast(
+        "Use a valid Hive username: 3–16 letters/numbers per part, hyphens ok. No @ or underscores.",
+        "error",
+      );
       return;
     }
     if (!window.hive_keychain) {
-      setError("Hive Keychain extension not detected");
+      showToast("Hive Keychain extension not detected", "error");
       return;
     }
 
@@ -188,18 +211,19 @@ export function LoginPage() {
       if (verified.rc_warning) {
         sessionStorage.setItem("hf_rc_warning", verified.rc_warning);
         setNotice(verified.rc_warning);
+        showToast(verified.rc_warning, "error");
       }
       setStatus("Logged in");
+      await refresh();
       showToast("Signed in successfully");
       navigate(dashboardPathForRole(role));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showToast(err instanceof Error ? err.message : String(err), "error");
       setStatus("Failed");
     }
   }
 
   async function devLogin() {
-    setError(null);
     try {
       setStatus("Dev login…");
       await apiFetch<AuthResponse>("/api/v1/auth/dev-keychain-login", {
@@ -207,10 +231,11 @@ export function LoginPage() {
         body: JSON.stringify({ role }),
       });
       setStatus("Logged in (dev)");
+      await refresh();
       showToast("Signed in successfully");
       navigate(dashboardPathForRole(role));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showToast(err instanceof Error ? err.message : String(err), "error");
       setStatus("Failed");
     }
   }
@@ -257,7 +282,8 @@ export function LoginPage() {
                   label="Hive username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="alice"
+                  placeholder="alice (no @)"
+                  autoComplete="username"
                 />
                 <Select
                   label="I'm signing in as"
@@ -309,7 +335,6 @@ export function LoginPage() {
                   Dev sign in (seeded account)
                 </Button>
               </div>
-              {error && <p className="error">{error}</p>}
 
               <div className="flex flex-col items-center gap-2 border-t border-border pt-4 text-center text-sm text-text-secondary">
                 <p>

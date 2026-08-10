@@ -16,6 +16,7 @@
     "dev:listener": "npm run build:packages && npm run dev -w @hive-freelance/listener",
     "build": "npm run build:packages && npm run build -w @hive-freelance/api && npm run build -w @hive-freelance/listener && npm run build -w @hive-freelance/web",
     "db:migrate": "npm run migrate -w @hive-freelance/db",
+    "db:bootstrap-haf": "node infra/haf-local/bootstrap.mjs",
     "lint": "npm run lint --workspaces --if-present"
   },
   "devDependencies": {

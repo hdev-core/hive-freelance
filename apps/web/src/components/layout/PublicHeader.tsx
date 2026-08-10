@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import { LayoutDashboard, Menu, X } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
+import { useAuth } from "../../auth/AuthProvider";
 import { LinkButton } from "../ui/LinkButton";
 import { ThemeToggle } from "../ui/ThemeToggle";
 import { IconButton } from "../ui/IconButton";
@@ -18,6 +19,76 @@ function navLinkClassName({ isActive }: { isActive: boolean }) {
   return cn(
     "rounded-md px-3 py-1.5 text-sm font-medium transition-shadow duration-150 hover:bg-surface-muted hover:shadow-elevate",
     isActive ? "bg-accent-subtle text-text-primary" : "text-text-secondary hover:text-text-primary",
+  );
+}
+
+function AuthActions({
+  mobile,
+  onNavigate,
+}: {
+  mobile?: boolean;
+  onNavigate?: () => void;
+}) {
+  const { user, loading, dashboardPath } = useAuth();
+
+  if (loading) {
+    return (
+      <div
+        className={cn(
+          "h-9 w-28 animate-pulse rounded-md bg-surface-muted",
+          mobile && "w-full",
+        )}
+        aria-hidden
+      />
+    );
+  }
+
+  if (user) {
+    return (
+      <>
+        <span
+          className={cn(
+            "truncate text-sm text-text-secondary",
+            mobile ? "px-1" : "max-w-[9rem]",
+          )}
+          title={`@${user.username}`}
+        >
+          @{user.username}
+        </span>
+        <LinkButton
+          to={dashboardPath}
+          size={mobile ? "md" : "sm"}
+          onClick={onNavigate}
+          className={mobile ? "w-full justify-center" : undefined}
+        >
+          <LayoutDashboard size={16} className="shrink-0" aria-hidden />
+          Dashboard
+        </LinkButton>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Link
+        to="/login"
+        className={cn(
+          "rounded-md text-sm font-medium text-text-secondary transition-shadow duration-150 hover:bg-surface-muted hover:text-text-primary hover:shadow-elevate",
+          mobile ? "px-3 py-2" : "px-3 py-1.5",
+        )}
+        onClick={onNavigate}
+      >
+        Sign in
+      </Link>
+      <LinkButton
+        to="/wallet/connect"
+        size={mobile ? "md" : "sm"}
+        onClick={onNavigate}
+        className={mobile ? "w-full justify-center" : undefined}
+      >
+        Connect Hive Wallet
+      </LinkButton>
+    </>
   );
 }
 
@@ -39,15 +110,7 @@ export function PublicHeader() {
 
         <div className="hidden items-center gap-3 md:flex">
           <ThemeToggle />
-          <Link
-            to="/login"
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-text-secondary transition-shadow duration-150 hover:bg-surface-muted hover:text-text-primary hover:shadow-elevate"
-          >
-            Sign in
-          </Link>
-          <LinkButton to="/wallet/connect" size="sm">
-            Connect Hive Wallet
-          </LinkButton>
+          <AuthActions />
         </div>
 
         <IconButton
@@ -79,16 +142,7 @@ export function PublicHeader() {
               <span className="text-sm font-medium text-text-secondary">Appearance</span>
               <ThemeToggle />
             </div>
-            <Link
-              to="/login"
-              className="rounded-md px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-muted hover:text-text-primary"
-              onClick={() => setMobileOpen(false)}
-            >
-              Sign in
-            </Link>
-            <LinkButton to="/wallet/connect" onClick={() => setMobileOpen(false)}>
-              Connect Hive Wallet
-            </LinkButton>
+            <AuthActions mobile onNavigate={() => setMobileOpen(false)} />
           </div>
         </div>
       )}

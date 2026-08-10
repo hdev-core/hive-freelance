@@ -8,6 +8,10 @@ export type HiveChainHandle = {
   apiNode: string;
   getDynamicGlobalProperties: () => Promise<DynamicGlobalProperties>;
   getBlock: (blockNum: number) => Promise<HiveBlock | null>;
+  /**
+   * No-op for the shared process chain — use `closeHiveChain()` on shutdown.
+   * Callers may still `await chain.close()` in finally blocks safely.
+   */
   close: () => Promise<void>;
 };
 
@@ -31,6 +35,18 @@ export type HiveBlock = {
 };
 
 type JsonRpcResult<T> = { result?: T; error?: { message: string } };
+
+type HiveChainState = {
+  apiNode: string;
+  handle: HiveChainHandle;
+};
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __hiveChain: HiveChainState | undefined;
+  // eslint-disable-next-line no-var
+  var __hiveChainInit: Promise<HiveChainHandle> | undefined;
+}
 
 async function jsonRpc<T>(
   apiNode: string,
@@ -62,31 +78,7 @@ async function jsonRpc<T>(
   return body.result;
 }
 
-/**
- * Creates a Hive chain handle.
- * Prefer @hiveio/wax when available; fall back to condenser_api JSON-RPC
- * for reads so local health checks work even if WASM init fails.
- */
-export async function createChain(
-  apiNode = process.env.HIVE_API_NODE ?? "https://api.hive.blog",
-): Promise<HiveChainHandle> {
-  let wax: unknown = null;
-
-  try {
-    const waxMod = await import("@hiveio/wax");
-    const createHiveChain =
-      (waxMod as { createHiveChain?: (opts?: { apiEndpoint?: string }) => Promise<unknown> })
-        .createHiveChain;
-    if (createHiveChain) {
-      wax = await createHiveChain({ apiEndpoint: apiNode });
-    }
-  } catch (err) {
-    console.warn(
-      "[hive] @hiveio/wax init failed; using JSON-RPC read path only:",
-      err instanceof Error ? err.message : err,
-    );
-  }
-
+function buildHandle(apiNode: string, wax: unknown): HiveChainHandle {
   return {
     wax,
     apiNode,
@@ -123,7 +115,90 @@ export async function createChain(
       };
     },
     async close() {
-      // WAX instances may expose destroy/close in future; no-op for now.
+      // Shared process chain — use closeHiveChain() on shutdown instead.
     },
   };
+}
+
+async function initChain(apiNode: string): Promise<HiveChainHandle> {
+  let wax: unknown = null;
+
+  try {
+    const waxMod = await import("@hiveio/wax");
+    const createHiveChain =
+      (waxMod as { createHiveChain?: (opts?: { apiEndpoint?: string }) => Promise<unknown> })
+        .createHiveChain;
+    if (createHiveChain) {
+      wax = await createHiveChain({ apiEndpoint: apiNode });
+    }
+  } catch (err) {
+    console.warn(
+      "[hive] @hiveio/wax init failed; using JSON-RPC read path only:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  const handle = buildHandle(apiNode, wax);
+  global.__hiveChain = { apiNode, handle };
+  return handle;
+}
+
+/**
+ * Returns the process-scoped Hive chain handle (one WAX instance per apiNode).
+ * Prefer @hiveio/wax when available; fall back to condenser_api JSON-RPC
+ * for reads so local health checks work even if WASM init fails.
+ * Call `closeHiveChain()` on process shutdown — per-call `close()` is a no-op.
+ */
+export async function createChain(
+  apiNode = process.env.HIVE_API_NODE ?? "https://api.hive.blog",
+): Promise<HiveChainHandle> {
+  const existing = global.__hiveChain;
+  if (existing) {
+    if (existing.apiNode !== apiNode) {
+      throw new Error(
+        "Hive chain already initialized with a different apiNode",
+      );
+    }
+    return existing.handle;
+  }
+
+  if (global.__hiveChainInit) {
+    const handle = await global.__hiveChainInit;
+    if (handle.apiNode !== apiNode) {
+      throw new Error(
+        "Hive chain already initialized with a different apiNode",
+      );
+    }
+    return handle;
+  }
+
+  const init = initChain(apiNode).finally(() => {
+    global.__hiveChainInit = undefined;
+  });
+  global.__hiveChainInit = init;
+  return init;
+}
+
+/**
+ * Tears down the shared WAX chain (process shutdown). Safe if never opened.
+ * Clears the global before delete so concurrent callers cannot reuse it.
+ * `@hiveio/wax@2.0.2` exposes `delete()` on the chain instance.
+ */
+export async function closeHiveChain(): Promise<void> {
+  const existing = global.__hiveChain;
+  global.__hiveChain = undefined;
+  global.__hiveChainInit = undefined;
+  if (!existing) return;
+
+  const wax = existing.handle.wax as { delete?: () => void } | null;
+  if (wax && typeof wax.delete === "function") {
+    try {
+      wax.delete();
+    } catch (err) {
+      console.warn(
+        "[hive] wax.delete() failed:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
 }

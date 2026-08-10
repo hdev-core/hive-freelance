@@ -49,8 +49,8 @@ On Keychain `POST /auth/verify`, the API may return `rc_warning` if `rc_api.find
 
 - `escrow_dispute` / admin `escrow_release` allowlist
 - Live dispute UI (API remains **501**)
-- Production AWS/GCP KMS
-- HAF replacing the custom listener
+- Production AWS/GCP KMS (keep local stub + `AGENT_LIVE` / `CUSTODIAL_LIVE` flags)
+- Full HAF-backed payment sync replacing interim listener (Milestone 1 still requires **HAF reads** for accounts/records — see Tech Stack + Ali `[4.3]` task plan)
 
 ## Local dry loop
 

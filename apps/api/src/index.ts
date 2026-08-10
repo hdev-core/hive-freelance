@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import { closePrisma } from "@hive-freelance/db";
+import { closeHafPool, closeHiveChain } from "@hive-freelance/hive";
 import { errorHandler } from "./lib/errors.js";
 import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
@@ -18,6 +19,7 @@ import { contractsRouter } from "./routes/contracts.js";
 import { milestonesRouter } from "./routes/milestones.js";
 import { paymentsRouter } from "./routes/payments.js";
 import { stubsRouter } from "./routes/stubs.js";
+import { hiveRouter } from "./routes/hive.js";
 
 const rootDir = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
 loadEnv({ path: resolve(rootDir, ".env") });
@@ -48,6 +50,7 @@ v1.use((_req, res, next) => {
 });
 v1.use("/auth", authRouter);
 v1.use("/users", usersRouter);
+v1.use("/hive", hiveRouter);
 v1.use("/jobs", jobsRouter);
 v1.use("/jobs/:id/proposals", jobProposalsRouter);
 v1.use("/proposals", proposalsRouter);
@@ -67,6 +70,8 @@ const server = app.listen(port, () => {
 async function shutdown() {
   server.close();
   await closePrisma();
+  await closeHafPool();
+  await closeHiveChain();
   process.exit(0);
 }
 

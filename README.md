@@ -12,11 +12,11 @@ Stack decisions live in [`Docs/[03] System_Architecture_Data_Model/[01] Tech_Sta
 |-------|----------------|
 | Frontend | `apps/web` — React + TypeScript (Vite), `@hiveio/wax-signers-keychain` |
 | API | `apps/api` — Node.js + Express + TypeScript |
-| Block listener (MVP) | `apps/listener` — custom stream → `hive_records` (Phase 2: HAF) |
+| Block listener (interim) | `apps/listener` — custom stream → `hive_records` (**M1 reads: HAF**, not this alone) |
 | Provisioning | `apps/provisioner` — account_create + RC delegation stubs |
 | Shared constants | `packages/shared` |
 | PostgreSQL access | `packages/db` |
-| Hive / WAX + KMS stub | `packages/hive` (`@hiveio/wax`, no dhive) |
+| Hive / WAX / HAF reader + KMS stub | `packages/hive` (`@hiveio/wax`, HAF SQL via `HAF_DATABASE_URL`, no dhive) |
 
 ## Prerequisites
 

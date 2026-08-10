@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronUp, LogOut, Settings, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../auth/AuthProvider";
 import { cn } from "../../lib/cn";
 import { Avatar } from "../ui/Avatar";
-import { apiFetch } from "../../api";
 import type { DashboardRole, DashboardUser } from "./types";
 
 export function ProfileMenu({
@@ -20,6 +20,7 @@ export function ProfileMenu({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const base = `/${role}`;
 
   useEffect(() => {
@@ -44,15 +45,6 @@ export function ProfileMenu({
     setOpen(false);
     onNavigate?.();
     fn?.();
-  }
-
-  async function logout() {
-    try {
-      await apiFetch("/api/v1/auth/logout", { method: "POST" });
-    } catch {
-      // Clear the local session regardless — cookie may already be gone/expired.
-    }
-    navigate("/");
   }
 
   return (
@@ -114,7 +106,11 @@ export function ProfileMenu({
           <button
             type="button"
             role="menuitem"
-            onClick={() => closeAnd(() => void logout())}
+            onClick={() =>
+              closeAnd(() => {
+                void logout().then(() => navigate("/"));
+              })
+            }
             className="flex w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-[13px] font-medium text-text-secondary transition-shadow duration-150 hover:bg-surface-muted hover:text-text-primary hover:shadow-elevate"
           >
             <LogOut size={16} />
