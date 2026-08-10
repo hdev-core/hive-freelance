@@ -5,7 +5,6 @@ import {
   LayoutGrid,
   Lock,
   MessageSquare,
-  Send,
   Settings,
   ShieldCheck,
   User,
@@ -27,6 +26,9 @@ import { ContractPage } from "./pages/ContractPage";
 import { ContractsPage } from "./pages/ContractsPage";
 import { JobsListPage } from "./pages/JobsListPage";
 import { JobDetailPage } from "./pages/JobDetailPage";
+import { JobProposalsPage } from "./pages/JobProposalsPage";
+import { SubmitProposalPage } from "./pages/SubmitProposalPage";
+import { MyProposalsPage } from "./pages/MyProposalsPage";
 import { PostJobPage } from "./pages/PostJobPage";
 import { ClientJobsPage } from "./pages/ClientJobsPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -41,8 +43,7 @@ type DashboardNavItem = {
 
 const clientNav: DashboardNavItem[] = [
   { path: "overview", title: "Overview", icon: LayoutGrid, description: "Snapshot of active jobs, escrow balances, and received proposals." },
-  { path: "jobs", title: "Jobs", icon: Briefcase, description: "Create and manage the jobs you've posted." },
-  { path: "proposals", title: "Proposals", icon: FileText, description: "Review proposals submitted by freelancers." },
+  { path: "jobs", title: "Jobs & Proposals", icon: Briefcase, description: "Create and manage the jobs you've posted." },
   { path: "messages", title: "Messages", icon: MessageSquare, description: "Chat with freelancers about active and prospective work." },
   { path: "escrow", title: "Escrow & Wallet", icon: Wallet, description: "Track locked escrow funds and your Hive wallet balance." },
   { path: "settings", title: "Settings", icon: Settings, description: "Manage your account and workspace preferences." },
@@ -78,16 +79,15 @@ export function App() {
           <Route path="jobs/new" element={<PostJobPage />} />
         </Route>
         <Route path="jobs/:id" element={<JobDetailPage />} />
-        <Route
-          path="jobs/:id/apply"
-          element={
-            <PlaceholderPage
-              title="Submit a proposal"
-              description="The milestone-based proposal builder lands in a later milestone."
-              icon={Send}
-            />
-          }
-        />
+        <Route element={<RequireAuth allow={["freelancer", "both"]} />}>
+          <Route path="jobs/:id/apply" element={<SubmitProposalPage />} />
+        </Route>
+        {/* No-login-required profile view — GET /users/:username is a public
+            endpoint (routes/users.ts has no requireAuth on it), and viewing
+            "About the client" from a job page shouldn't force a login.
+            Distinct from /client|freelancer/profile/:username, which stays
+            auth-gated because it lives under DashboardLayout. */}
+        <Route path="profile/:username" element={<ProfilePage />} />
         <Route
           path="jobs/:id/hire"
           element={
@@ -166,6 +166,7 @@ export function App() {
             <Route path="jobs" element={<ClientJobsPage />} />
             <Route path="jobs/new" element={<PostJobPage />} />
             <Route path="jobs/:id" element={<JobDetailPage />} />
+            <Route path="jobs/:id/proposals" element={<JobProposalsPage />} />
             {clientNav
               .filter((item) => item.path !== "jobs" && item.path !== "profile")
               .map((item) => (
@@ -189,18 +190,10 @@ export function App() {
             <Route index element={<Navigate to="/freelancer/overview" replace />} />
             <Route path="jobs" element={<JobsListPage />} />
             <Route path="jobs/:id" element={<JobDetailPage />} />
-            <Route
-              path="jobs/:id/apply"
-              element={
-                <PlaceholderPage
-                  title="Submit a proposal"
-                  description="The milestone-based proposal builder lands in a later milestone."
-                  icon={Send}
-                />
-              }
-            />
+            <Route path="jobs/:id/apply" element={<SubmitProposalPage />} />
+            <Route path="proposals" element={<MyProposalsPage />} />
             {freelancerNav
-              .filter((item) => item.path !== "jobs" && item.path !== "profile")
+              .filter((item) => item.path !== "jobs" && item.path !== "profile" && item.path !== "proposals")
               .map((item) => (
                 <Route
                   key={item.path}

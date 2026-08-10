@@ -7,6 +7,7 @@ export async function listJobs(opts: {
   category?: string;
   skill?: string;
   status?: string;
+  client_id?: string;
   budget_min?: number;
   budget_max?: number;
   page?: number;
@@ -15,9 +16,18 @@ export async function listJobs(opts: {
   const page = Math.max(1, opts.page ?? 1);
   const limit = Math.min(50, Math.max(1, opts.limit ?? 20));
   const offset = (page - 1) * limit;
-  const status = opts.status ?? "open";
 
-  const where: Record<string, unknown> = { status };
+  const where: Record<string, unknown> = {};
+  // Public browse (no client_id) keeps the original default: open jobs
+  // only. A client_id filter means "my posted jobs" — show every status
+  // unless one was explicitly requested, since a client wants to see their
+  // in_progress/completed/cancelled jobs too, not just open ones.
+  if (opts.client_id != null) {
+    where.clientId = BigInt(opts.client_id);
+    if (opts.status) where.status = opts.status;
+  } else {
+    where.status = opts.status ?? "open";
+  }
   if (opts.category) where.category = opts.category;
   if (opts.skill) where.skillsRequired = { has: opts.skill };
   if (opts.budget_min != null || opts.budget_max != null) {
@@ -32,20 +42,63 @@ export async function listJobs(opts: {
     orderBy: { createdAt: "desc" },
     take: limit,
     skip: offset,
+    include: {
+      _count: { select: { proposals: true } },
+      client: { select: { hiveUsername: true, profile: { select: { displayName: true, location: true } } } },
+    },
   });
-  return { items: jobs.map(toJobRow), page, limit };
+
+  // One grouped aggregate for every client on this page, instead of one
+  // rating query per job — same reasoning as getPublicProfile's aggregate,
+  // just batched since a page can have up to 50 jobs/clients.
+  const clientIds = [...new Set(jobs.map((j) => j.clientId))];
+  const ratings = clientIds.length
+    ? await prisma.review.groupBy({
+        by: ["revieweeId"],
+        where: { revieweeId: { in: clientIds } },
+        _avg: { rating: true },
+        _count: { rating: true },
+      })
+    : [];
+  const ratingByClientId = new Map(
+    ratings.map((r) => [r.revieweeId.toString(), { average: r._avg.rating, count: r._count.rating }]),
+  );
+
+  const items = jobs.map((j) => {
+    const rating = ratingByClientId.get(j.clientId.toString()) ?? { average: null, count: 0 };
+    return {
+      ...toJobRow(j),
+      proposalCount: j._count.proposals,
+      client_username: j.client.hiveUsername,
+      client_display_name: j.client.profile?.displayName ?? null,
+      client_location: j.client.profile?.location ?? null,
+      client_rating: {
+        average: rating.average != null ? Math.round(rating.average * 100) / 100 : null,
+        count: rating.count,
+      },
+    };
+  });
+
+  return { items, page, limit };
 }
 
 export async function getJob(id: string) {
   const job = await prisma.job.findUnique({
     where: { id: BigInt(id) },
-    include: { _count: { select: { proposals: true } } },
+    include: {
+      _count: { select: { proposals: true } },
+      // Only the username is selected — the detail page needs it to link
+      // to the client's real Profile API record (GET /users/:username);
+      // nothing else about the client is exposed via the Jobs API.
+      client: { select: { hiveUsername: true } },
+    },
   });
   if (!job) throw new AppError(404, "Job not found");
 
   return {
     ...toJobRow(job),
     proposalCount: job._count.proposals,
+    client_username: job.client.hiveUsername,
   };
 }
 

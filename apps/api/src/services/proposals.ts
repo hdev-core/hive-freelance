@@ -4,10 +4,14 @@ import {
   isUniqueViolation,
   toContractRow,
   toProposalRow,
+  toProposalMilestoneRow,
+  toMilestoneRow,
   Prisma,
 } from "@hive-freelance/db";
 import { AppError } from "../lib/errors.js";
 import { getJob } from "./jobs.js";
+
+const milestonesOrder = { orderBy: { milestoneOrder: "asc" as const } };
 
 export async function listProposalsForJob(jobId: string, clientId: string) {
   const job = await getJob(jobId);
@@ -16,15 +20,104 @@ export async function listProposalsForJob(jobId: string, clientId: string) {
   }
   const proposals = await prisma.proposal.findMany({
     where: { jobId: BigInt(jobId) },
+    include: {
+      milestones: milestonesOrder,
+      freelancer: {
+        select: {
+          hiveUsername: true,
+          profile: { select: { displayName: true, avatarUrl: true, skills: true } },
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
-  return proposals.map(toProposalRow);
+
+  // Batched rating aggregate, same pattern as listJobs's client_rating: one
+  // groupBy for every freelancer on this job instead of one query per card.
+  const freelancerIds = [...new Set(proposals.map((p) => p.freelancerId))];
+  const ratings = freelancerIds.length
+    ? await prisma.review.groupBy({
+        by: ["revieweeId"],
+        where: { revieweeId: { in: freelancerIds } },
+        _avg: { rating: true },
+        _count: { rating: true },
+      })
+    : [];
+  const ratingByFreelancerId = new Map(
+    ratings.map((r) => [r.revieweeId.toString(), { average: r._avg.rating, count: r._count.rating }]),
+  );
+
+  return proposals.map((p) => {
+    const rating = ratingByFreelancerId.get(p.freelancerId.toString()) ?? { average: null, count: 0 };
+    return {
+      ...toProposalRow(p),
+      milestones: p.milestones.map(toProposalMilestoneRow),
+      freelancer_username: p.freelancer.hiveUsername,
+      freelancer_display_name: p.freelancer.profile?.displayName ?? null,
+      freelancer_avatar_url: p.freelancer.profile?.avatarUrl ?? null,
+      // Real Profile.skills, first entry only — there is no headline/title
+      // field on Profile, so a single skill tag stands in for the
+      // freelancer's "role" line instead of inventing one.
+      freelancer_top_skill: p.freelancer.profile?.skills?.[0] ?? null,
+      freelancer_rating: {
+        average: rating.average != null ? Math.round(rating.average * 100) / 100 : null,
+        count: rating.count,
+      },
+    };
+  });
 }
+
+/**
+ * The freelancer's own proposals across every job, every status — unlike
+ * getDashboard's pendingProposals (pending-only, capped at 50, built for the
+ * dashboard overview widget), this is a full listing for the "My Proposals"
+ * page. Always scoped to the caller; there's no cross-user case.
+ */
+export async function listMyProposals(freelancerId: string) {
+  const proposals = await prisma.proposal.findMany({
+    where: { freelancerId: BigInt(freelancerId) },
+    include: {
+      job: { select: { title: true, status: true } },
+      milestones: milestonesOrder,
+      // Only present once a proposal has been accepted and promoted into a
+      // Contract — null for pending/rejected proposals. contract_milestones
+      // uses the real, 5-state Milestone model (pending/funded/submitted/
+      // approved/released), not the proposal-stage ProposalMilestone rows,
+      // which have no status at all.
+      contract: {
+        include: { milestones: { orderBy: { milestoneOrder: "asc" as const } } },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+
+  return proposals.map((p) => ({
+    ...toProposalRow(p),
+    job_title: p.job.title,
+    job_status: p.job.status,
+    milestones: p.milestones.map(toProposalMilestoneRow),
+    contract_milestones: p.contract ? p.contract.milestones.map(toMilestoneRow) : null,
+  }));
+}
+
+export type SubmitProposalMilestoneInput = {
+  title: string;
+  amount: number;
+  duration: string;
+};
 
 export async function submitProposal(
   jobId: string,
   freelancerId: string,
-  data: { cover_letter: string; bid_amount: number },
+  data: {
+    cover_letter: string;
+    bid_amount: number;
+    estimated_duration?: string | null;
+    available_to_start?: string | null;
+    portfolio_links?: { title: string; url: string }[] | null;
+    milestones: SubmitProposalMilestoneInput[];
+  },
 ) {
   const job = await getJob(jobId);
   if (job.status !== "open") {
@@ -34,6 +127,18 @@ export async function submitProposal(
     throw new AppError(403, "Cannot propose on your own job");
   }
 
+  // Milestone amounts are the bid's breakdown — they must add up to exactly
+  // what the client sees as the total bid, same rule the mockup's sidebar
+  // total enforces client-side.
+  const milestoneTotal = data.milestones.reduce((sum, m) => sum + m.amount, 0);
+  if (Math.round(milestoneTotal * 100) !== Math.round(data.bid_amount * 100)) {
+    throw new AppError(
+      400,
+      "Milestone amounts must sum to the bid amount",
+      "MILESTONE_SUM_MISMATCH",
+    );
+  }
+
   try {
     const proposal = await prisma.proposal.create({
       data: {
@@ -41,9 +146,24 @@ export async function submitProposal(
         freelancerId: BigInt(freelancerId),
         coverLetter: data.cover_letter,
         bidAmount: data.bid_amount,
+        estimatedDuration: data.estimated_duration ?? null,
+        availableToStart: data.available_to_start ?? null,
+        portfolioLinks: data.portfolio_links ?? undefined,
+        milestones: {
+          create: data.milestones.map((m, i) => ({
+            title: m.title,
+            amount: m.amount,
+            duration: m.duration,
+            milestoneOrder: i,
+          })),
+        },
       },
+      include: { milestones: milestonesOrder },
     });
-    return toProposalRow(proposal);
+    return {
+      ...toProposalRow(proposal),
+      milestones: proposal.milestones.map(toProposalMilestoneRow),
+    };
   } catch (err) {
     if (isUniqueViolation(err)) {
       throw new AppError(409, "Already proposed on this job");
@@ -90,145 +210,18 @@ export async function rejectProposal(proposalId: string, clientId: string) {
   return toProposalRow(updated);
 }
 
-function rethrowAcceptConflict(err: unknown): never {
-  if (isUniqueViolation(err)) {
-    const target =
-      err instanceof Prisma.PrismaClientKnownRequestError
-        ? err.meta?.target
-        : undefined;
-    const targetStr = Array.isArray(target) ? target.join(",") : String(target ?? "");
-    if (targetStr.includes("proposal_id")) {
-      // contracts_proposal_id_key — this exact proposal already has a
-      // contract (double-accept of the same proposal), not the
-      // same-job race the partial index guards against.
-      throw new AppError(409, "This proposal has already been accepted");
-    }
-    // idx_contracts_active_per_job — the actual same-job race: two
-    // different proposals both made it past the row locks (shouldn't
-    // happen given the locking above, but this is the backstop).
-    throw new AppError(409, "This job already has an active contract");
-  }
-  throw err;
-}
-
-/**
- * Locks both the proposal AND job rows (plain `FOR UPDATE` on the join,
- * not `FOR UPDATE OF j`) for the duration of the transaction.
- *
- * The job lock is what actually closes the main race: two different
- * proposals on the *same* job are two different proposal rows, so
- * locking per-proposal alone (the original approach) let both accepts
- * through in parallel, each creating its own contract. Locking the job
- * row serializes them — the second one to run sees the job already
- * flipped to in_progress and is rejected by the status guard below.
- *
- * The proposal row also needs to be in the lock set: under READ
- * COMMITTED, once the second transaction unblocks it re-reads the job
- * row fresh (so the job-status guard is race-safe on its own), but a
- * row that's only *read*, not locked, would still reflect this
- * transaction's original snapshot — so `proposal.status !== "pending"`
- * needs the proposal row locked too, not just observed.
- *
- * Correctness here depends on READ COMMITTED (the default, and not
- * changed anywhere in this codebase). If the isolation level is ever
- * raised, the second transaction gets a 40001 serialization failure
- * instead of a clean 409 — worth revisiting this comment if that ever
- * changes.
- *
- * The job lookup is folded into the same raw query as a JOIN, saving a
- * round-trip that a separate `tx.job.findUnique` would otherwise cost.
- *
- * `Contract.proposalId @unique` does NOT protect against the main race,
- * since two different proposals (and therefore two contracts) have
- * different proposalIds — it only prevents double-accepting the *same*
- * proposal. The row locks above are what actually close the race; the
- * partial unique index on `contracts(job_id) WHERE status = 'active'`
- * (see migration) is defense-in-depth on top of that, and the
- * `contracts_proposal_id_key` unique constraint is a second, separate
- * safety net for the double-accept case — both mapped to 409 below,
- * distinguished by which constraint actually fired.
- */
-export async function acceptProposal(proposalId: string, clientId: string) {
-  const contract = await prisma
-    .$transaction(
-      async (tx) => {
-        const locked = await tx.$queryRaw<
-          {
-            id: bigint;
-            job_id: bigint;
-            freelancer_id: bigint;
-            bid_amount: Prisma.Decimal;
-            status: string;
-            client_id: bigint;
-            job_status: string;
-          }[]
-        >`
-          SELECT p.id, p.job_id, p.freelancer_id, p.bid_amount, p.status,
-                 j.client_id, j.status AS job_status
-          FROM proposals p
-          JOIN jobs j ON j.id = p.job_id
-          WHERE p.id = ${BigInt(proposalId)}
-          FOR UPDATE
-        `;
-
-        const proposal = locked[0];
-        if (!proposal) throw new AppError(404, "Proposal not found");
-        if (proposal.client_id.toString() !== clientId) {
-          throw new AppError(403, "Only the job client can accept");
-        }
-        if (proposal.job_status !== "open") {
-          throw new AppError(409, "Job is not open");
-        }
-        if (proposal.status !== "pending") {
-          throw new AppError(400, "Proposal is not pending");
-        }
-        if (proposal.client_id === proposal.freelancer_id) {
-          throw new AppError(
-            403,
-            "Cannot be both client and freelancer on the same contract",
-            "SELF_CONTRACT",
-          );
-        }
-
-        await tx.proposal.update({
-          where: { id: proposal.id },
-          data: { status: "accepted" },
-        });
-        await tx.proposal.updateMany({
-          where: {
-            jobId: proposal.job_id,
-            id: { not: proposal.id },
-            status: "pending",
-          },
-          data: { status: "rejected" },
-        });
-        await tx.job.update({
-          where: { id: proposal.job_id },
-          data: { status: "in_progress" },
-        });
-
-        return tx.contract.create({
-          data: {
-            jobId: proposal.job_id,
-            proposalId: proposal.id,
-            clientId: proposal.client_id,
-            freelancerId: proposal.freelancer_id,
-            totalAmount: proposal.bid_amount,
-            status: "active",
-            startDate: new Date(),
-          },
-        });
-      },
-      // Default is 5000ms — observed real-world latency through the pooled
-      // connection came in at ~5.5s for this transaction's round-trips,
-      // tripping the default and closing the transaction before the final
-      // statement ran. This headroom is for connection/pooler latency,
-      // not query cost.
-      { timeout: 15000 },
-    )
-    .catch(rethrowAcceptConflict);
-
-  const custom_json = {
+/** Shared by acceptProposal (fresh contract) and getAcceptCustomJson (retry
+ * after a dropped/cancelled Keychain broadcast) so both send byte-identical
+ * custom_json for the same contract. */
+function buildContractCreatedCustomJson(contract: {
+  id: bigint;
+  jobId: bigint;
+  proposalId: bigint;
+  clientId: bigint;
+  freelancerId: bigint;
+  totalAmount: Prisma.Decimal;
+}) {
+  return {
     id: APP_ID,
     json: JSON.stringify({
       app_id: APP_ID,
@@ -240,9 +233,173 @@ export async function acceptProposal(proposalId: string, clientId: string) {
       freelancer_id: contract.freelancerId.toString(),
       total_amount: contract.totalAmount.toString(),
     }),
-    required_auths: [],
-    required_posting_auths: [], // filled by client username on broadcast
+    required_auths: [] as string[],
+    required_posting_auths: [] as string[], // filled by client username on broadcast
   };
+}
+
+/**
+ * Maps a P2002 from acceptProposal's transaction to the right 409, by
+ * which constraint actually fired:
+ *  - contracts_proposal_id_key: this exact proposal already has a
+ *    contract (double-accept of the same proposal).
+ *  - idx_contracts_active_per_job: the same-job race — two different
+ *    proposals both made it past the row locks (shouldn't happen given
+ *    the FOR UPDATE OF proposals, jobs lock above, but this is the
+ *    backstop, not the primary defense).
+ * Any other error passes through unchanged.
+ */
+function rethrowAcceptConflict(err: unknown): never {
+  if (isUniqueViolation(err)) {
+    const target =
+      err instanceof Prisma.PrismaClientKnownRequestError
+        ? err.meta?.target
+        : undefined;
+    const targetStr = Array.isArray(target) ? target.join(",") : String(target ?? "");
+    if (targetStr.includes("proposal_id")) {
+      throw new AppError(409, "This proposal has already been accepted");
+    }
+    throw new AppError(409, "This job already has an active contract");
+  }
+  throw err;
+}
+
+/**
+ * Preserves the original's pessimistic locking: two clients accepting
+ * different proposals on the same job at the same instant must not both
+ * succeed. The original used `SELECT ... FOR UPDATE` inside a manual
+ * BEGIN/COMMIT/ROLLBACK; Prisma's typed API has no FOR UPDATE, so the lock
+ * itself is a raw query run *inside* a Prisma interactive transaction —
+ * everything after it (the actual writes) uses the normal typed API, still
+ * inside the same transaction. Throwing anywhere in here rolls the whole
+ * thing back automatically, same as the original's catch/ROLLBACK.
+ */
+export async function acceptProposal(proposalId: string, clientId: string) {
+  const contract = await prisma.$transaction(
+    async (tx) => {
+      // Job is locked in the same query as the proposal (not a separate
+      // findUnique after) — otherwise a concurrent cancelJob could commit
+      // between the two reads and this transaction would still write the
+      // job back to "in_progress" over it, or two accepts on different
+      // proposals for the same job could both pass the status check (only
+      // Contract.proposalId is unique, not jobId).
+      const locked = await tx.$queryRaw<
+        {
+          id: bigint;
+          job_id: bigint;
+          freelancer_id: bigint;
+          bid_amount: Prisma.Decimal;
+          status: string;
+          job_status: string;
+          job_client_id: bigint;
+        }[]
+      >`SELECT proposals.id, proposals.job_id, proposals.freelancer_id, proposals.bid_amount, proposals.status,
+               jobs.status AS job_status, jobs.client_id AS job_client_id
+        FROM proposals
+        JOIN jobs ON jobs.id = proposals.job_id
+        WHERE proposals.id = ${BigInt(proposalId)}
+        FOR UPDATE OF proposals, jobs`;
+
+      const row = locked[0];
+      if (!row) throw new AppError(404, "Proposal not found");
+      const proposal = {
+        id: row.id,
+        job_id: row.job_id,
+        freelancer_id: row.freelancer_id,
+        bid_amount: row.bid_amount,
+        status: row.status,
+      };
+      const job = { status: row.job_status, clientId: row.job_client_id };
+
+      // Not part of the FOR UPDATE lock above: proposal milestones are
+      // written once at submitProposal and never mutated afterward (no
+      // edit-proposal endpoint exists), so there's nothing concurrent to
+      // guard against here — a plain typed read is enough.
+      const proposalMilestones = await tx.proposalMilestone.findMany({
+        where: { proposalId: proposal.id },
+        orderBy: { milestoneOrder: "asc" },
+      });
+
+      if (job.status !== "open") {
+        throw new AppError(409, "This job is no longer open.");
+      }
+      if (job.clientId.toString() !== clientId) {
+        throw new AppError(403, "Only the job client can accept");
+      }
+      if (proposal.status !== "pending") {
+        throw new AppError(400, "Proposal is not pending");
+      }
+      if (job.clientId === proposal.freelancer_id) {
+        throw new AppError(
+          403,
+          "Cannot be both client and freelancer on the same contract",
+          "SELF_CONTRACT",
+        );
+      }
+
+      await tx.proposal.update({
+        where: { id: proposal.id },
+        data: { status: "accepted" },
+      });
+      await tx.proposal.updateMany({
+        where: {
+          jobId: proposal.job_id,
+          id: { not: proposal.id },
+          status: "pending",
+        },
+        data: { status: "rejected" },
+      });
+      await tx.job.update({
+        where: { id: proposal.job_id },
+        data: { status: "in_progress" },
+      });
+
+      const contract = await tx.contract.create({
+        data: {
+          jobId: proposal.job_id,
+          proposalId: proposal.id,
+          clientId: job.clientId,
+          freelancerId: proposal.freelancer_id,
+          totalAmount: proposal.bid_amount,
+          status: "active",
+          startDate: new Date(),
+        },
+      });
+
+      // Promote proposal-stage milestones into real, trackable rows on the
+      // new contract. Only title/amount/order carry over — `duration` is
+      // deliberately dropped: it's proposal-stage-only, non-binding
+      // information, and the real Milestone table has no field for it (see
+      // ProposalMilestone's model comment in schema.prisma). createMany is
+      // one extra round-trip regardless of milestone count, same reasoning
+      // as the timeout comment below — six round-trips became seven.
+      if (proposalMilestones.length > 0) {
+        await tx.milestone.createMany({
+          data: proposalMilestones.map((m) => ({
+            contractId: contract.id,
+            title: m.title,
+            amount: m.amount,
+            milestoneOrder: m.milestoneOrder,
+          })),
+        });
+      }
+
+      return contract;
+    },
+    // Default is 5000ms — observed real-world latency through the pooled
+    // connection came in at ~5.5s for this transaction's six round-trips,
+    // tripping the default and closing the transaction before the final
+    // statement ran. Six small statements shouldn't need 15s of DB work;
+    // this headroom is for connection/pooler latency, not query cost.
+    // Still 15000ms after adding the milestone lookup/promotion (two more
+    // round-trips, one read + one batched write) — headroom was sized for
+    // pooler/connection latency, not per-statement query cost, so it has
+    // slack for this. Revisit if proposals start carrying many more
+    // milestones than the UI's current handful.
+    { timeout: 15000 },
+  ).catch(rethrowAcceptConflict);
+
+  const custom_json = buildContractCreatedCustomJson(contract);
 
   return { contract: toContractRow(contract), custom_json };
 }
@@ -274,4 +431,37 @@ export async function confirmAccept(
     data: { hiveTxId },
   });
   return toContractRow(updated);
+}
+
+/**
+ * Re-issues the same custom_json acceptProposal already returned, for the
+ * "accepted but the client cancelled/lost the Keychain broadcast" dead end:
+ * the contract row already exists with no hive_tx_id, so this can't call
+ * acceptProposal again (proposal is no longer `pending`) — it just hands
+ * back the payload to retry the broadcast + confirmAccept with.
+ */
+export async function getAcceptCustomJson(proposalId: string, clientId: string) {
+  // Ownership is checked before anything else about the proposal's state is
+  // revealed — otherwise any authenticated client could probe proposal IDs
+  // and learn whether they're accepted/confirmed before being rejected.
+  const contract = await prisma.contract.findUnique({
+    where: { proposalId: BigInt(proposalId) },
+  });
+  if (!contract) throw new AppError(404, "Contract not found");
+  if (contract.clientId.toString() !== clientId) {
+    throw new AppError(403, "Only the client can confirm");
+  }
+
+  const proposal = await prisma.proposal.findUnique({
+    where: { id: BigInt(proposalId) },
+  });
+  if (!proposal) throw new AppError(404, "Proposal not found");
+  if (proposal.status !== "accepted") {
+    throw new AppError(400, "Proposal is not accepted");
+  }
+  if (proposal.hiveTxId) {
+    throw new AppError(400, "Proposal is already confirmed on-chain");
+  }
+
+  return { custom_json: buildContractCreatedCustomJson(contract) };
 }

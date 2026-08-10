@@ -29,74 +29,106 @@ declare global {
   }
 }
 
+/**
+ * Smoke page for Milestone 1 Phase B.
+ * Login challenge round-trip uses raw `hive_keychain.requestSignBuffer` (see LoginPage).
+ * This page reports WAX package/init and raw Keychain sign separately so status never
+ * claims WAX signed the buffer when only raw Keychain did.
+ */
 export function KeychainCheckPage() {
   const [username, setUsername] = useState("");
-  const [status, setStatus] = useState("Idle");
+  const [waxStatus, setWaxStatus] = useState("Idle");
+  const [keychainStatus, setKeychainStatus] = useState("Idle");
   const [detail, setDetail] = useState<string | null>(null);
 
   function detectExtension() {
+    setDetail(null);
     const installed = KeychainProvider.isExtensionInstalled();
     if (!installed && typeof window.hive_keychain === "undefined") {
-      setStatus("Keychain not detected");
-      setDetail("Install the Hive Keychain browser extension, then reload.");
+      setKeychainStatus("Keychain not detected");
+      setDetail(
+        "Install the Hive Keychain browser extension, then reload this page.",
+      );
       return;
     }
     if (typeof window.hive_keychain !== "undefined") {
       window.hive_keychain.requestHandshake(() => {
-        setStatus("Keychain detected");
-        setDetail("Handshake succeeded (hive_keychain + WAX signer package).");
+        setKeychainStatus("Keychain detected (handshake OK)");
+        setDetail(
+          installed
+            ? "hive_keychain handshake succeeded; WAX KeychainProvider reports extension installed."
+            : "hive_keychain handshake succeeded.",
+        );
       });
       return;
     }
-    setStatus("Keychain detected");
-    setDetail("KeychainProvider.isExtensionInstalled() returned true.");
+    setKeychainStatus("Keychain detected (WAX isExtensionInstalled)");
+    setDetail(
+      "KeychainProvider.isExtensionInstalled() returned true, but window.hive_keychain is missing — reload or reinstall the extension.",
+    );
   }
 
-  async function smokeSign() {
+  async function checkWaxInit() {
+    setDetail(null);
     if (!username.trim()) {
-      setStatus("Enter a Hive username");
+      setWaxStatus("Enter a Hive username first");
       return;
     }
-
     try {
       const { createHiveChain } = await import("@hiveio/wax");
       await createHiveChain();
       KeychainProvider.for(username.trim(), "posting");
-      setStatus("WAX + Keychain provider ready");
-      setDetail("Provider created; running sign-buffer smoke test…");
+      setWaxStatus("WAX init + KeychainProvider.for OK");
+      setDetail(
+        "WAX createHiveChain succeeded and KeychainProvider.for was created. This does not sign a buffer — use “Raw Keychain signBuffer smoke” for signing (same path as /login).",
+      );
     } catch (err) {
-      setStatus("WAX signer setup failed — using hive_keychain API");
+      setWaxStatus("WAX init failed");
       setDetail(err instanceof Error ? err.message : String(err));
     }
+  }
 
+  function smokeRawSignBuffer() {
+    setDetail(null);
+    const u = username.trim();
+    if (!u) {
+      setKeychainStatus("Enter a Hive username");
+      return;
+    }
     if (typeof window.hive_keychain === "undefined") {
-      setStatus("Keychain not detected");
+      setKeychainStatus("Keychain not detected");
+      setDetail(
+        "Cannot run signBuffer smoke without the Hive Keychain extension.",
+      );
       return;
     }
 
     const message = `hive-freelance-smoke:${Date.now()}`;
-    window.hive_keychain.requestSignBuffer(
-      username.trim(),
-      message,
-      "Posting",
-      (response) => {
-        if (response.success) {
-          setStatus("Sign buffer OK");
-          setDetail(response.result ?? "Signed");
-        } else {
-          setStatus("Sign buffer failed");
-          setDetail(response.message ?? "User rejected or error");
-        }
-      },
-    );
+    setKeychainStatus("Waiting for Keychain…");
+    window.hive_keychain.requestSignBuffer(u, message, "Posting", (response) => {
+      if (response.success) {
+        setKeychainStatus("Raw Keychain signBuffer OK");
+        setDetail(
+          `Signed with window.hive_keychain (not WAX provider).\nmessage=${message}\nresult=${response.result ?? "(empty)"}`,
+        );
+      } else {
+        setKeychainStatus("Raw Keychain signBuffer failed");
+        setDetail(
+          response.message ??
+            "User rejected the request or Keychain returned an error.",
+        );
+      }
+    });
   }
 
   return (
     <section className="panel">
       <h1>Hive Keychain check</h1>
       <p className="lede">
-        Verifies browser Keychain presence and optional posting-key sign-buffer
-        smoke test via <code>@hiveio/wax-signers-keychain</code>.
+        Milestone 1 smoke: detect Keychain, check WAX package init, and run a{" "}
+        <strong>raw</strong> <code>hive_keychain.requestSignBuffer</code> test
+        (same signing API <code>/login</code> uses for the challenge round-trip).
+        WAX status and Keychain sign status are reported separately on purpose.
       </p>
 
       <div className="actions">
@@ -111,13 +143,19 @@ export function KeychainCheckPage() {
             placeholder="alice"
           />
         </label>
-        <button type="button" onClick={() => void smokeSign()}>
-          Sign buffer smoke test
+        <button type="button" onClick={() => void checkWaxInit()}>
+          Check WAX init
+        </button>
+        <button type="button" onClick={smokeRawSignBuffer}>
+          Raw Keychain signBuffer smoke
         </button>
       </div>
 
       <p>
-        <strong>Status:</strong> {status}
+        <strong>WAX status:</strong> {waxStatus}
+      </p>
+      <p>
+        <strong>Keychain status:</strong> {keychainStatus}
       </p>
       {detail && <pre className="detail">{detail}</pre>}
     </section>

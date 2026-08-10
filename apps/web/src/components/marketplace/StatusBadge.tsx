@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, ShieldAlert, ShieldCheck, type LucideIcon } from "lucide-react";
+import { CheckCircle2, CircleDot, Clock, ShieldAlert, ShieldCheck, XCircle, type LucideIcon } from "lucide-react";
 import { cn } from "../../lib/cn";
 
 /**
@@ -43,7 +43,8 @@ const statusConfig: Record<StatusBadgeStatus, { label: string; icon?: LucideIcon
   },
   open: {
     label: "Open",
-    className: "border border-border bg-surface-muted text-text-secondary",
+    icon: CircleDot,
+    className: "border border-accent-subtle-border bg-accent-subtle text-accent",
   },
   in_progress: {
     label: "In Progress",
@@ -55,13 +56,10 @@ const statusConfig: Record<StatusBadgeStatus, { label: string; icon?: LucideIcon
     icon: CheckCircle2,
     className: "bg-success-bg text-success-text",
   },
-  // Minimal, non-crashing treatment only — matches the neutral open/active
-  // styling rather than inventing new visual language. A dedicated
-  // cancelled look (if wanted) is a design call, not something to guess
-  // at here; flagged in the PR.
   cancelled: {
     label: "Cancelled",
-    className: "border border-border bg-surface-muted text-text-secondary",
+    icon: XCircle,
+    className: "border border-border bg-surface-muted text-text-muted",
   },
 };
 

@@ -10,6 +10,8 @@ import {
 import {
   acceptProposal,
   confirmAccept,
+  getAcceptCustomJson,
+  listMyProposals,
   listProposalsForJob,
   rejectProposal,
   submitProposal,
@@ -21,6 +23,17 @@ export const proposalsRouter = Router();
 /** Nested under /jobs/:id/proposals — mount separately */
 export const jobProposalsRouter = Router({ mergeParams: true });
 
+/** The caller's own proposals across every job/status — backs "My Proposals". */
+proposalsRouter.get(
+  "/",
+  requireAuth,
+  requireFreelancer,
+  asyncHandler(async (req, res) => {
+    const rows = await listMyProposals(req.user!.id);
+    res.json({ items: rows });
+  }),
+);
+
 jobProposalsRouter.get(
   "/",
   requireAuth,
@@ -31,6 +44,52 @@ jobProposalsRouter.get(
   }),
 );
 
+const httpUrl = z
+  .string()
+  .refine(
+    (val) => {
+      try {
+        const protocol = new URL(val).protocol;
+        return protocol === "http:" || protocol === "https:";
+      } catch {
+        return false;
+      }
+    },
+    { message: "URL must use http or https" },
+  );
+
+const portfolioLinkSchema = z.object({
+  title: z.string().min(1).max(100),
+  url: httpUrl,
+});
+
+/**
+ * .multipleOf(0.01) is too strict here: it's driven by how many decimal
+ * digits the float's own string representation has, so a clean 2-decimal
+ * sum that lands on something like 5116.789999999999 due to float addition
+ * gets rejected even though it's really a real cent value. An exact
+ * round-trip check (`Math.round(v*100)/100 === v`) is *also* too strict —
+ * float representation noise means even values the client already rounded
+ * can fail exact equality — so this allows a tight epsilon around the
+ * nearest cent instead, then normalizes to that exact cent value. Genuine
+ * sub-cent precision (e.g. 100.005) is still rejected: its distance from
+ * the nearest cent is far larger than the epsilon.
+ */
+const centsAmount = z
+  .number()
+  .positive()
+  .max(99_999_999.99)
+  .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, {
+    message: "Amount must not have more than 2 decimal places",
+  })
+  .transform((v) => Math.round(v * 100) / 100);
+
+const proposalMilestoneSchema = z.object({
+  title: z.string().min(1).max(200),
+  amount: centsAmount,
+  duration: z.string().min(1).max(50),
+});
+
 jobProposalsRouter.post(
   "/",
   requireAuth,
@@ -39,7 +98,11 @@ jobProposalsRouter.post(
     const body = z
       .object({
         cover_letter: z.string().min(1),
-        bid_amount: z.number().positive(),
+        bid_amount: centsAmount,
+        estimated_duration: z.string().max(50).nullable().optional(),
+        available_to_start: z.string().max(50).nullable().optional(),
+        portfolio_links: z.array(portfolioLinkSchema).max(10).nullable().optional(),
+        milestones: z.array(proposalMilestoneSchema).min(1).max(20),
       })
       .parse(req.body);
     const proposal = await submitProposal(param(req, "id"), req.user!.id, body);
@@ -63,6 +126,16 @@ proposalsRouter.post(
   requireClient,
   asyncHandler(async (req, res) => {
     const result = await acceptProposal(param(req, "id"), req.user!.id);
+    res.json(result);
+  }),
+);
+
+proposalsRouter.get(
+  "/:id/accept/custom-json",
+  requireAuth,
+  requireClient,
+  asyncHandler(async (req, res) => {
+    const result = await getAcceptCustomJson(param(req, "id"), req.user!.id);
     res.json(result);
   }),
 );

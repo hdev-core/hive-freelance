@@ -41,7 +41,13 @@ export function consumeChallenge(
   const key = normalizeUsername(username);
   const entry = store.get(key);
   if (!entry) return false;
+  if (Date.now() > entry.expiresAt) {
+    store.delete(key);
+    return false;
+  }
+  // Do not delete on mismatch — a wrong signature attempt must not wipe a
+  // valid pending challenge (and must not let an attacker invalidate logins).
+  if (entry.challenge !== challenge) return false;
   store.delete(key);
-  if (Date.now() > entry.expiresAt) return false;
-  return entry.challenge === challenge;
+  return true;
 }

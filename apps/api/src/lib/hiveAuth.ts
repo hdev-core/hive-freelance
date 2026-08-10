@@ -15,8 +15,13 @@ const apiNode = () => process.env.HIVE_API_NODE ?? "https://api.hive.blog";
 // can be dot-separated for sub-accounts (e.g. "parent.child").
 const HIVE_USERNAME_SEGMENT = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
+/** Strip @ / whitespace; lowercase. */
+export function normalizeHiveUsername(username: string): string {
+  return username.trim().replace(/^@+/, "").toLowerCase();
+}
+
 export function isValidHiveUsername(username: string): boolean {
-  const name = username.trim().toLowerCase();
+  const name = normalizeHiveUsername(username);
   if (name.length === 0) return false;
   return name.split(".").every((segment) => {
     if (segment.length < 3 || segment.length > 16) return false;
@@ -34,7 +39,7 @@ export async function getHiveAccount(
       jsonrpc: "2.0",
       id: 1,
       method: "condenser_api.get_accounts",
-      params: [[username.trim().toLowerCase()]],
+      params: [[normalizeHiveUsername(username)]],
     }),
   });
   if (!res.ok) throw new Error(`Hive RPC HTTP ${res.status}`);

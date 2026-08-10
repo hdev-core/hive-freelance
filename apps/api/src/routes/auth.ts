@@ -12,6 +12,7 @@ import {
   getAccountRcStatus,
   getHiveAccount,
   isValidHiveUsername,
+  normalizeHiveUsername,
   verifyPostingSignature,
 } from "../lib/hiveAuth.js";
 import {
@@ -75,14 +76,14 @@ function issueSession(
 authRouter.get(
   "/challenge",
   asyncHandler(async (req, res) => {
-    const username = String(req.query.username ?? "").trim();
+    const username = normalizeHiveUsername(String(req.query.username ?? ""));
     if (!username) {
       throw new AppError(400, "username query param required");
     }
     if (!isValidHiveUsername(username)) {
       throw new AppError(
         400,
-        "Enter a valid Hive username (3-16 lowercase letters, numbers, or hyphens per segment)",
+        "Enter a valid Hive username (3–16 lowercase letters/numbers per part; hyphens ok; no @ or underscores)",
         "INVALID_USERNAME",
       );
     }
@@ -91,7 +92,7 @@ authRouter.get(
       throw new AppError(404, `Hive account @${username} not found`);
     }
     const { challenge, expires_in } = createChallenge(username);
-    res.json({ challenge, expires_in, username: username.toLowerCase() });
+    res.json({ challenge, expires_in, username });
   }),
 );
 
@@ -106,7 +107,7 @@ authRouter.post(
   "/verify",
   asyncHandler(async (req, res) => {
     const body = verifyBody.parse(req.body);
-    const username = body.username.trim().toLowerCase();
+    const username = normalizeHiveUsername(body.username);
 
     if (!consumeChallenge(username, body.challenge)) {
       throw new AppError(401, "Invalid or expired challenge", "BAD_CHALLENGE");

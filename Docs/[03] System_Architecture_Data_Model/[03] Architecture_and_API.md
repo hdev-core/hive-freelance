@@ -4,7 +4,7 @@
 
 ## Overview
 
-Four layers, one background service, one provisioning service. The blockchain listener subscribes to the live Hive chain, filters for this app's operations, and keeps PostgreSQL in sync. The provisioning service creates Hive accounts for Google OAuth users and delegates Resource Credits to new accounts so they can broadcast transactions.
+Four layers, one background sync path, one provisioning service. **Milestone 1 standard:** build/sign with **WAX**; read/index chain data with **HAF**. An interim custom listener may still filter ops into `hive_records` while HAF is wired. The provisioning service creates Hive accounts for Google OAuth users and stubs Resource Credit delegation so new accounts can broadcast later.
 
 ---
 
@@ -30,15 +30,16 @@ flowchart TD
         API --> PROV
     end
 
-    subgraph LISTENER["Blockchain Listener — Node.js\n(MVP: custom stream → Production: HAF)"]
-        STREAM["Hive Block Stream\n(wax streaming)"]
+    subgraph LISTENER["Chain read / index\n(M1 standard: HAF · interim: custom listener)"]
+        HAFNODE["HAF projection\n(PostgreSQL chain tables)"]
+        STREAM["Interim: custom block stream"]
         FILTER["Op Filter\n(app_id = hive-freelance-v1)"]
         WRITER["hive_records Writer\n(+ status updater)"]
         STREAM --> FILTER --> WRITER
     end
 
     subgraph DB["PostgreSQL"]
-        TABLES["users, profiles, jobs, proposals\ncontracts, milestones, payments\nreviews, hive_records, oauth_accounts"]
+        TABLES["users, profiles, jobs, proposals\ncontracts, milestones, payments\nreviews, hive_records, oauth_accounts\n+ HAF chain projection tables"]
     end
 
     subgraph HIVE["Hive Blockchain"]
@@ -56,7 +57,8 @@ flowchart TD
     KC -->|"broadcasts signed tx\ndirectly to node"| NODE
     BL -->|"reads via wax"| NODE
     PROV -->|"account_create\ndelegate_vesting_shares"| NODE
-    STREAM -->|"subscribes to new blocks"| NODE
+    STREAM -->|"subscribes to new blocks (interim)"| NODE
+    HAFNODE -->|"HAF projection (M1 read path)"| DB
     WRITER -->|"writes hive_records\nupdates payment status"| DB
     GOAUTH -->|"OAuth token"| GAPI
     GAPI -->|"verified identity"| AUTH
@@ -147,7 +149,7 @@ sequenceDiagram
 
 **Transaction library:** All server-side transaction building and signing uses `@hiveio/wax` (Greateck standard). Browser-side Keychain signing uses `@hiveio/signers-keychain`. Do not use `@hiveio/dhive`.
 
-**Blockchain listener (MVP trade-off):** The custom Node.js block listener is essentially a hand-rolled subset of HAF (Hive Application Framework) — a PostgreSQL extension that streams Hive block data directly into SQL tables and handles fork reversion automatically. The custom listener is defensible for MVP scale. Migration to HAF is the production direction.
+**Blockchain listener / HAF:** Greateck standard for **reading/indexing** chain data is **HAF** (PostgreSQL projection of the chain). Milestone 1 foundation acceptance requires the app to read Hive account/records **via HAF**. An interim custom Node.js block listener + `hive_records` may still exist as scaffolding; it is a hand-rolled subset of HAF and must not be treated as the long-term or M1-acceptance read path.
 
 **Google OAuth + account provisioning:** Users without a Hive account log in via Google. The provisioning service creates a Hive account (`account_create` op), delegates Resource Credits (`delegate_vesting_shares`) so the new account can broadcast transactions, and stores the custodial active key in a KMS. The `oauth_accounts` table (see doc 02) maps Google identities to Hive usernames.
 
@@ -157,7 +159,7 @@ sequenceDiagram
 
 **Why the blockchain listener is a separate service:** The API is request-driven. The listener is event-driven (new blocks every 3s). Mixing them creates lifecycle conflicts. They share the same DB but run independently.
 
-**LIB requirement — never confirm on first-seen:** Only update `payments.status` to `escrowed` or `released` after the containing block reaches the Last Irreversible Block (LIB). A payment seen in a head block could be on a fork and later revert. The listener must track LIB (available from `condenser_api.get_dynamic_global_properties` as `last_irreversible_block_num`) and delay status updates until the block is confirmed irreversible. This is one of the strongest arguments for migrating to HAF, which handles irreversibility automatically.
+**LIB requirement — never confirm on first-seen:** Only update `payments.status` to `escrowed` or `released` after the containing block reaches the Last Irreversible Block (LIB). A payment seen in a head block could be on a fork and later revert. Track LIB (from `get_dynamic_global_properties` as `last_irreversible_block_num`) and delay status updates until irreversible — or rely on HAF’s irreversibility handling once the read/sync path is HAF-backed.
 
 **Custodial surface — Google user keys:** The KMS holds an active key for every Google-provisioned user, not just the agent. Per-user key isolation (separate KMS key per user, not a shared vault key) is required. Least-authority principle: each user's KMS key should only be authorized to sign for that user's account. Users must be clearly informed in UX/ToS that the platform is custodying their keys. The claim/hand-over path (`/auth/me/claim-account`) provides the exit to self-custody.
 
