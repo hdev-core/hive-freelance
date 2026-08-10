@@ -1,4 +1,5 @@
 export {
+  closeHiveChain,
   createChain,
   type DynamicGlobalProperties,
   type HiveBlock,

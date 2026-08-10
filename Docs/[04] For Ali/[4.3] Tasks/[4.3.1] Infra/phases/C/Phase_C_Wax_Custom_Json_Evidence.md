@@ -2,7 +2,7 @@
 
 > **Owner:** Ali · **Date:** 2026-07-27  
 > **Code:** `packages/hive/src/waxTx.ts` · `POST /api/v1/health/wax-custom-json-demo`  
-> **Plain-language summary:** [`[07] Phase_C_What_We_Built_Plain_Language.md`](./[07]%20Phase_C_What_We_Built_Plain_Language.md)
+> **Plain-language summary:** [`[07] Phase_C_What_We_Built_Plain_Language.md`](Phase_C_What_We_Built_Plain_Language.md)
 
 ---
 

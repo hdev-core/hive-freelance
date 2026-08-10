@@ -2,7 +2,7 @@
 
 > **Owner:** Ali · **Date:** 2026-07-30  
 > **Closes:** Milestone 1 RC-delegation-on-provisioning stub (confirm, don’t expand)  
-> **Related:** [`[01] work plan`](./[01]%20Milestone_1_Hive_Layer_Work_Plan.md) §11.4 · [`Auth_Guide`](../../[02]%20Additional%20Docs/[07]%20Auth_Guide.md)
+> **Related:** [`[01] work plan`](../../[01]%20Milestone_1_Hive_Layer_Work_Plan.md) §11.4 · [`Auth_Guide`](../../../../../[02]%20Additional%20Docs/[07]%20Auth_Guide.md)
 
 ---
 
@@ -14,7 +14,7 @@ When a Google user gets a new Hive account, the platform **prepares** to give it
 
 ## Env defaults (E2)
 
-From [`.env.example`](../../../.env.example) — matches Auth + Local Dev guides:
+From [`.env.example`](../../../../../../.env.example) — matches Auth + Local Dev guides:
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
@@ -60,7 +60,7 @@ Log excerpt:
 - [x] `rcDryRun: true` / message says not broadcast
 - [x] No unexpected mainnet broadcast (`PROVISIONER_LIVE=false`)
 
-Code: [`apps/provisioner/src/index.ts`](../../../apps/provisioner/src/index.ts) → `delegateRc()`.
+Code: [`apps/provisioner/src/index.ts`](../../../../../../apps/provisioner/src/index.ts) → `delegateRc()`.
 
 ---
 

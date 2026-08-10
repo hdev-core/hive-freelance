@@ -57,4 +57,4 @@ Hive's fee-less model and 3-second block time make it viable for the high-freque
 
 **Milestone 1 foundation also includes:** Keychain challenge scaffolding, and an RC-delegation-on-provisioning stub. This layer is shared plumbing — not marketplace feature logic.
 
-See: `Docs/[04] For Ali/[4.3] Tasks/[01] Milestone_1_Hive_Layer_Work_Plan.md`.
+See: `Docs/[04] For Ali/[4.3] Tasks/[4.3.1] Infra/[01] Milestone_1_Hive_Layer_Work_Plan.md`.

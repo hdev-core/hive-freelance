@@ -63,7 +63,7 @@ You are **done** only when all of these are true:
 
 ### Phase A — Align & spike (½–1 day)
 
-> **A1 / A2 / A3 done** → see [`[02] Phase_A_M1_Brief.md`](./[02]%20Phase_A_M1_Brief.md) · [`[03] Phase_A_HAF_Decision.md`](./[03]%20Phase_A_HAF_Decision.md) · [`[04] Phase_A_Hive_Inventory.md`](./[04]%20Phase_A_Hive_Inventory.md)  
+> **A1 / A2 / A3 done** → see [`[02] Phase_A_M1_Brief.md`](phases/A/Phase_A_M1_Brief.md) · [`[03] Phase_A_HAF_Decision.md`](phases/A/Phase_A_HAF_Decision.md) · [`[04] Phase_A_Hive_Inventory.md`](phases/A/Phase_A_Hive_Inventory.md)  
 > HAF path: working assumption recorded; **Laure sign-off still pending** in `[03]`.
 
 | ID | Task | Done when | Status |
@@ -74,7 +74,7 @@ You are **done** only when all of these are true:
 
 ### Phase B — Keychain challenge (close acceptance #2) (~0.5 day)
 
-> **B1 / B2 / B3 done✅** → see [`[05] Phase_B_Keychain_Evidence.md`](./[05]%20Phase_B_Keychain_Evidence.md)  
+> **B1 / B2 / B3 done✅** → see [`[05] Phase_B_Keychain_Evidence.md`](phases/B/Phase_B_Keychain_Evidence.md)  
 > API challenge/verify + edge cases verified (Postgres via Docker). KeychainCheck dual-status fixed. Live Keychain UI screenshot: fill in `[05]`.
 
 | ID | Task | Files / area | Done when | Status |
@@ -85,7 +85,7 @@ You are **done** only when all of these are true:
 
 ### Phase C — WAX build + `custom_json` broadcast/mock (close acceptance #3) (~1–2 days)
 
-> **C1 / C2 / C3 / C4 done✅** → [`[06] Phase_C_Wax_Custom_Json_Evidence.md`](./[06]%20Phase_C_Wax_Custom_Json_Evidence.md) · [`[07] Phase_C_What_We_Built_Plain_Language.md`](./[07]%20Phase_C_What_We_Built_Plain_Language.md)  
+> **C1 / C2 / C3 / C4 done✅** → [`[06] Phase_C_Wax_Custom_Json_Evidence.md`](phases/C/Phase_C_Wax_Custom_Json_Evidence.md) · [`[07] Phase_C_What_We_Built_Plain_Language.md`](phases/C/Phase_C_What_We_Built_Plain_Language.md)  
 > Default is mock (`WAX_CUSTOM_JSON_LIVE=false`). Demo endpoint needs `ENABLE_DEV_AUTH_ROUTES=true`.
 
 | ID | Task | Files / area | Done when | Status |
@@ -99,7 +99,7 @@ You are **done** only when all of these are true:
 
 ### Phase D — HAF read path (close acceptance #1) (~2–4 days, depends on A2)
 
-> **D1–D5 done✅** → [`[08] Phase_D_HAF_Read_Evidence.md`](./[08]%20Phase_D_HAF_Read_Evidence.md)  
+> **D1–D5 done✅** → [`[08] Phase_D_HAF_Read_Evidence.md`](phases/D/Phase_D_HAF_Read_Evidence.md)  
 > Local HAF-compatible DB `hive_haf` / `hafd.*` via `HAF_DATABASE_URL`. Listener remains interim for escrow only.
 
 | ID | Task | Files / area | Done when | Status |
@@ -114,7 +114,7 @@ You are **done** only when all of these are true:
 
 ### Phase E — RC delegation stub (confirm, don’t expand) (~0.5 day)
 
-> **E1 / E2 / E3 done✅** → [`[10] Phase_E_RC_Stub_Evidence.md`](./[10]%20Phase_E_RC_Stub_Evidence.md)  
+> **E1 / E2 / E3 done✅** → [`[10] Phase_E_RC_Stub_Evidence.md`](phases/E/Phase_E_RC_Stub_Evidence.md)  
 > Dry-run by default (`PROVISIONER_LIVE=false`). Smoke: `node scripts/smoke-rc-dry-run.mjs`.
 
 | ID | Task | Files / area | Done when | Status |
@@ -125,7 +125,7 @@ You are **done** only when all of these are true:
 
 ### Phase F — Docs, cleanup, handoff (~0.5–1 day)
 
-> **F1 / F2 / F3 done✅** → demo script [`[11] M1_Demo_Script_15min.md`](./[11]%20M1_Demo_Script_15min.md) · HAF handoff [`[09]`](./[09]%20Phase_D_HAF_Handoff_for_Laure.md)
+> **F1 / F2 / F3 done✅** → demo script [`[11] M1_Demo_Script_15min.md`](../M1_Demo_Script_15min.md) · HAF handoff [`[09]`](phases/D/Phase_D_HAF_Handoff_for_Laure.md)
 
 | ID | Task | Done when | Status |
 |----|------|-----------|--------|
@@ -179,14 +179,14 @@ Adjust Day 3+ after A2 (HAF infra reality).
 ## 8. Definition of done (copy for PR / card)
 
 - [x] No `@hiveio/dhive` in dependencies or imports. (`npm ls @hiveio/dhive` → empty, 2026-07-30)
-- [x] WAX used to build at least one `custom_json` (broadcast or mock) — evidence attached. → [`[06]`](./[06]%20Phase_C_Wax_Custom_Json_Evidence.md) · plain language [`[07]`](./[07]%20Phase_C_What_We_Built_Plain_Language.md)
-- [x] Keychain challenge round-trip works — evidence attached. → [`[05] Phase_B_Keychain_Evidence.md`](./[05]%20Phase_B_Keychain_Evidence.md)
-- [x] App reads Hive account/records **via HAF** — evidence attached (SQL/API response). → [`[08] Phase_D_HAF_Read_Evidence.md`](./[08]%20Phase_D_HAF_Read_Evidence.md)
-- [x] RC-delegation-on-provisioning remains a **stub** (dry-run default) — noted. → [`[10] Phase_E_RC_Stub_Evidence.md`](./[10]%20Phase_E_RC_Stub_Evidence.md)
+- [x] WAX used to build at least one `custom_json` (broadcast or mock) — evidence attached. → [`[06]`](phases/C/Phase_C_Wax_Custom_Json_Evidence.md) · plain language [`[07]`](phases/C/Phase_C_What_We_Built_Plain_Language.md)
+- [x] Keychain challenge round-trip works — evidence attached. → [`[05] Phase_B_Keychain_Evidence.md`](phases/B/Phase_B_Keychain_Evidence.md)
+- [x] App reads Hive account/records **via HAF** — evidence attached (SQL/API response). → [`[08] Phase_D_HAF_Read_Evidence.md`](phases/D/Phase_D_HAF_Read_Evidence.md)
+- [x] RC-delegation-on-provisioning remains a **stub** (dry-run default) — noted. → [`[10] Phase_E_RC_Stub_Evidence.md`](phases/E/Phase_E_RC_Stub_Evidence.md)
 - [x] Docs updated so M1 standard is **WAX + HAF**, not “listener forever.”
 - [x] This work stays **shared Hive layer**, not new feature logic.
 
-Demo replay: [`[11] M1_Demo_Script_15min.md`](./[11]%20M1_Demo_Script_15min.md).
+Demo replay: [`[11] M1_Demo_Script_15min.md`](../M1_Demo_Script_15min.md).
 
 ---
 
@@ -439,13 +439,13 @@ Manual Keychain UI still needs a human (browser extension).
 
 ## 14. Demo day script (15 minutes)
 
-Use the runnable checklist: [`[11] M1_Demo_Script_15min.md`](./[11]%20M1_Demo_Script_15min.md).
+Use the runnable checklist: [`[11] M1_Demo_Script_15min.md`](../M1_Demo_Script_15min.md).
 
 1. Show `/health` + Hive/HAF health (stack up).
 2. Keychain login happy path (11.1) + one edge: cancel popup (KC-2).
 3. WAX `custom_json` mock (11.2) + show log.
 4. HAF account read (11.3) + say out loud: “this is HAF, not the custom listener.”
-5. RC dry-run log (11.4) → evidence [`[10]`](./[10]%20Phase_E_RC_Stub_Evidence.md).
+5. RC dry-run log (11.4) → evidence [`[10]`](phases/E/Phase_E_RC_Stub_Evidence.md).
 6. Show §8 definition of done checkboxes + evidence folder.
 
 If any step fails, use §11.5 to isolate env vs feature before the meeting.

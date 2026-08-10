@@ -2,7 +2,7 @@
 
 > **Owner:** Ali · **Date:** 2026-07-27  
 > **Status:** Pending lead sign-off (Laure)  
-> **Related:** [`[01] work plan`](./[01]%20Milestone_1_Hive_Layer_Work_Plan.md) Phase D · [`Tech_Stack.md`](../../[03]%20System_Architecture_Data_Model/[01]%20Tech_Stack.md)
+> **Related:** [`[01] work plan`](../../[01]%20Milestone_1_Hive_Layer_Work_Plan.md) Phase D · [`Tech_Stack.md`](../../../../../[03]%20System_Architecture_Data_Model/[01]%20Tech_Stack.md)
 
 ---
 
@@ -80,4 +80,4 @@ Notes: ________
 
 - [x] Working assumption written  
 - [ ] Laure / lead sign-off recorded above  
-- [x] Phase D landed with local `HAF_DATABASE_URL` → `hive_haf` (see [`[08]`](./[08]%20Phase_D_HAF_Read_Evidence.md)); shared Greateck URL still optional when provided  
+- [x] Phase D landed with local `HAF_DATABASE_URL` → `hive_haf` (see [`[08]`](../D/Phase_D_HAF_Read_Evidence.md)); shared Greateck URL still optional when provided  

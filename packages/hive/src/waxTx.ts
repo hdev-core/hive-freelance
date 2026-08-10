@@ -65,7 +65,6 @@ export async function buildCustomJsonDemo(
 
   try {
     const waxMod = await import("@hiveio/wax");
-    const createHiveChain = waxMod.createHiveChain;
     const custom_json = waxMod.custom_json as {
       create: (v: Record<string, unknown>) => unknown;
       toJSON: (v: unknown) => {
@@ -76,9 +75,10 @@ export async function buildCustomJsonDemo(
       };
     };
 
-    const waxChain = await createHiveChain({ apiEndpoint: chain.apiNode });
+    // Reuse the process-scoped chain from createChain() — do not create a
+    // second WAX instance (WASM retained memory is never reclaimed).
     const tx = await (
-      waxChain as unknown as {
+      chain.wax as {
         createTransaction: () => Promise<{
           pushOperation: (op: unknown) => void;
           id: string;

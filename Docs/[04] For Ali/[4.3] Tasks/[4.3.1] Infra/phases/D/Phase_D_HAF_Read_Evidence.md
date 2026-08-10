@@ -3,7 +3,7 @@
 > **Owner:** Ali · **Date:** 2026-07-30  
 > **Closes:** Milestone 1 acceptance #1 (read Hive account/records via HAF)  
 > **Path:** Local HAF-compatible Postgres (`hive_haf` / `hafd.*`) via `HAF_DATABASE_URL`  
-> **Related:** [`[01] work plan`](./[01]%20Milestone_1_Hive_Layer_Work_Plan.md) · [`[03] HAF decision`](./[03]%20Phase_A_HAF_Decision.md)
+> **Related:** [`[01] work plan`](../../[01]%20Milestone_1_Hive_Layer_Work_Plan.md) · [`[03] HAF decision`](../A/Phase_A_HAF_Decision.md)
 
 ---
 

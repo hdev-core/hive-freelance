@@ -110,7 +110,7 @@ curl -s http://localhost:4000/api/v1/hive/accounts/hfdemo
 docker exec -it hive-freelance-db psql -U hive -d hive_haf -c "SELECT name FROM hafd.accounts;"
 ```
 
-Responses must include `"source":"haf"`. Do **not** treat `hive_records` as the acceptance read path. Evidence: [`[08] Phase_D_HAF_Read_Evidence.md`](../[04]%20For%20Ali/[4.3]%20Tasks/[08]%20Phase_D_HAF_Read_Evidence.md).
+Responses must include `"source":"haf"`. Do **not** treat `hive_records` as the acceptance read path. Evidence: [`[08] Phase_D_HAF_Read_Evidence.md`](../[04]%20For%20Ali/[4.3]%20Tasks/[4.3.1]%20Infra/phases/D/Phase_D_HAF_Read_Evidence.md).
 
 ### Provisioning / RC stub (Milestone 1)
 
@@ -122,7 +122,7 @@ Google account provisioning **dry-runs** `account_create` + RC delegation (`dele
 | `HIVE_RC_DELEGATION_VESTS` | `10.000000 VESTS` | Amount used only in live mode |
 | `ENABLE_DEV_AUTH_ROUTES` | `false` | Must be `true` (and non-production) for `POST /api/v1/auth/dev-google` |
 
-Details: [`[07] Auth_Guide.md`](./[07]%20Auth_Guide.md). Evidence: [`[10] Phase_E_RC_Stub_Evidence.md`](../[04]%20For%20Ali/[4.3]%20Tasks/[10]%20Phase_E_RC_Stub_Evidence.md).
+Details: [`[07] Auth_Guide.md`](./[07]%20Auth_Guide.md). Evidence: [`[10] Phase_E_RC_Stub_Evidence.md`](../[04]%20For%20Ali/[4.3]%20Tasks/[4.3.1]%20Infra/phases/E/Phase_E_RC_Stub_Evidence.md).
 
 Quick prove (also `node scripts/smoke-rc-dry-run.mjs`):
 

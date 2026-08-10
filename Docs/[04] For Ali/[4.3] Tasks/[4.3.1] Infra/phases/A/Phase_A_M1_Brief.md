@@ -2,7 +2,7 @@
 
 > **Owner:** Ali · **Date:** 2026-07-27  
 > **Use this** when someone asks “what is Milestone 1?”  
-> **Source:** Architecture card 08 Jul · [`Docs/[03]/[01] Tech_Stack.md`](../../[03]%20System_Architecture_Data_Model/[01]%20Tech_Stack.md)
+> **Source:** Architecture card 08 Jul · [`Docs/[03]/[01] Tech_Stack.md`](../../../../../[03]%20System_Architecture_Data_Model/[01]%20Tech_Stack.md)
 
 ---
 
@@ -41,6 +41,6 @@ It is the pipes and electricity — **not** the furniture.
 
 ## Next
 
-- HAF path decision → [`[03] Phase_A_HAF_Decision.md`](./[03]%20Phase_A_HAF_Decision.md)
-- File inventory → [`[04] Phase_A_Hive_Inventory.md`](./[04]%20Phase_A_Hive_Inventory.md)
-- Full work plan → [`[01] Milestone_1_Hive_Layer_Work_Plan.md`](./[01]%20Milestone_1_Hive_Layer_Work_Plan.md)
+- HAF path decision → [`[03] Phase_A_HAF_Decision.md`](Phase_A_HAF_Decision.md)
+- File inventory → [`[04] Phase_A_Hive_Inventory.md`](Phase_A_Hive_Inventory.md)
+- Full work plan → [`[01] Milestone_1_Hive_Layer_Work_Plan.md`](../../[01]%20Milestone_1_Hive_Layer_Work_Plan.md)

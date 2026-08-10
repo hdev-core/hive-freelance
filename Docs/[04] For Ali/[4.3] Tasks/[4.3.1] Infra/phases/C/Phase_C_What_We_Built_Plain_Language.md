@@ -1,7 +1,7 @@
 # Phase C — What we built (plain language)
 
 > For Ali / teammates who want the “what & why” without deep code.  
-> **Date:** 2026-07-27 · **Related evidence:** [`[06] Phase_C_Wax_Custom_Json_Evidence.md`](./[06]%20Phase_C_Wax_Custom_Json_Evidence.md)
+> **Date:** 2026-07-27 · **Related evidence:** [`[06] Phase_C_Wax_Custom_Json_Evidence.md`](Phase_C_Wax_Custom_Json_Evidence.md)
 
 ---
 

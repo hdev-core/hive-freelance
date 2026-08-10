@@ -48,7 +48,7 @@ curl -s http://localhost:4000/api/v1/health/hive
 curl -s http://localhost:4000/api/v1/health/haf
 ```
 
-HAF health must include `"source":"haf"`. Evidence pattern: [`[08]`](./[08]%20Phase_D_HAF_Read_Evidence.md).
+HAF health must include `"source":"haf"`. Evidence pattern: [`[08]`]([4.3.1]%20Infra/phases/D/Phase_D_HAF_Read_Evidence.md).
 
 ---
 
@@ -60,7 +60,7 @@ HAF health must include `"source":"haf"`. Evidence pattern: [`[08]`](./[08]%20Ph
 
 Optional edge: cancel Keychain popup → clear error, can retry.
 
-If extension unavailable in this session, show prior evidence: [`[05] Phase_B_Keychain_Evidence.md`](./[05]%20Phase_B_Keychain_Evidence.md).
+If extension unavailable in this session, show prior evidence: [`[05] Phase_B_Keychain_Evidence.md`]([4.3.1]%20Infra/phases/B/Phase_B_Keychain_Evidence.md).
 
 ---
 
@@ -74,7 +74,7 @@ curl -s -X POST http://localhost:4000/api/v1/health/wax-custom-json-demo ^
   -d "{\"note\":\"m1-demo\"}"
 ```
 
-Expect mock / dry-run `hive_tx_id` and WAX path (not dhive). Evidence: [`[06]`](./[06]%20Phase_C_Wax_Custom_Json_Evidence.md) · plain language [`[07]`](./[07]%20Phase_C_What_We_Built_Plain_Language.md).
+Expect mock / dry-run `hive_tx_id` and WAX path (not dhive). Evidence: [`[06]`]([4.3.1]%20Infra/phases/C/Phase_C_Wax_Custom_Json_Evidence.md) · plain language [`[07]`]([4.3.1]%20Infra/phases/C/Phase_C_What_We_Built_Plain_Language.md).
 
 ---
 
@@ -87,7 +87,7 @@ curl -s http://localhost:4000/api/v1/hive/accounts/hfdemo
 Expect `"source":"haf"` + account + operations.  
 **Say:** “this is HAF, not the custom listener.”
 
-Evidence: [`[08]`](./[08]%20Phase_D_HAF_Read_Evidence.md). Real shared HAF cutover: [`[09]`](./[09]%20Phase_D_HAF_Handoff_for_Laure.md).
+Evidence: [`[08]`]([4.3.1]%20Infra/phases/D/Phase_D_HAF_Read_Evidence.md). Real shared HAF cutover: [`[09]`]([4.3.1]%20Infra/phases/D/Phase_D_HAF_Handoff_for_Laure.md).
 
 ---
 
@@ -113,13 +113,13 @@ Expect log:
 [provisioner] dry-run delegate_vesting_shares (RC) for @…
 ```
 
-Evidence: [`[10] Phase_E_RC_Stub_Evidence.md`](./[10]%20Phase_E_RC_Stub_Evidence.md).
+Evidence: [`[10] Phase_E_RC_Stub_Evidence.md`]([4.3.1]%20Infra/phases/E/Phase_E_RC_Stub_Evidence.md).
 
 ---
 
 ## 6. Close (≈1 min)
 
-Open [`[01] Milestone_1_Hive_Layer_Work_Plan.md`](./[01]%20Milestone_1_Hive_Layer_Work_Plan.md) §8 definition of done and tick/show:
+Open [`[01] Milestone_1_Hive_Layer_Work_Plan.md`]([4.3.1]%20Infra/[01]%20Milestone_1_Hive_Layer_Work_Plan.md) §8 definition of done and tick/show:
 
 | Item | Evidence |
 |------|----------|

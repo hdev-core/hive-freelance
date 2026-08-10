@@ -2,7 +2,7 @@
 
 > **Owner:** Ali · **Date:** 2026-07-27  
 > **Purpose:** Keep / Change / Replace / Leave alone — grounded in the current repo  
-> **HAF path assumption:** [`[03] Phase_A_HAF_Decision.md`](./[03]%20Phase_A_HAF_Decision.md)
+> **HAF path assumption:** [`[03] Phase_A_HAF_Decision.md`](Phase_A_HAF_Decision.md)
 
 ---
 

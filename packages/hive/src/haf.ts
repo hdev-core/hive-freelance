@@ -12,14 +12,9 @@ export type HafReadStoreOptions = {
   connectionString?: string;
 };
 
-type HafPoolState = {
-  pool: pg.Pool;
-  connectionString: string;
-};
-
 declare global {
   // eslint-disable-next-line no-var
-  var __hafPool: HafPoolState | undefined;
+  var __hafPools: Map<string, pg.Pool> | undefined;
 }
 
 function normalizeAccountName(name: string): string {
@@ -36,22 +31,33 @@ function requireHafUrl(explicit?: string): string {
   return url;
 }
 
-function getSharedPool(connectionString: string): pg.Pool {
-  const existing = global.__hafPool;
-  if (existing) {
-    if (existing.connectionString !== connectionString) {
-      throw new Error(
-        "HAF pool already initialized with a different connection string",
-      );
-    }
-    return existing.pool;
-  }
+function poolMax(): number {
+  const raw = Number(process.env.HAF_POOL_MAX);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 5;
+}
 
-  const pool = new Pool({ connectionString, max: 5 });
-  const state: HafPoolState = { pool, connectionString };
+function getPoolMap(): Map<string, pg.Pool> {
+  if (!global.__hafPools) {
+    global.__hafPools = new Map();
+  }
+  return global.__hafPools;
+}
+
+function getSharedPool(connectionString: string): pg.Pool {
+  const pools = getPoolMap();
+  const existing = pools.get(connectionString);
+  if (existing) return existing;
+
+  const pool = new Pool({ connectionString, max: poolMax() });
+  // Idle client failures (Postgres restart, network blip) emit 'error' on the
+  // pool. With no listener, EventEmitter throws and kills the process — fatal
+  // once the pool is a process-scoped singleton.
+  pool.on("error", (err) =>
+    console.error("[haf] idle client error", err.message),
+  );
   // Always stash on globalThis so tsx/watch reloads reuse one pool (matches
   // packages/db Prisma pattern in non-production; fine in production too).
-  global.__hafPool = state;
+  pools.set(connectionString, pool);
   return pool;
 }
 
@@ -97,7 +103,8 @@ function mapOp(row: {
 
 /**
  * SQL reader against a HAF-compatible Postgres projection (`hafd` schema).
- * Uses a process-scoped `pg.Pool` — call `closeHafPool()` on API shutdown.
+ * Uses a process-scoped `pg.Pool` keyed by connection string — call
+ * `closeHafPool()` on API shutdown.
  * `HiveReadStore.close()` is a no-op so per-request teardown cannot kill the pool.
  */
 export function createHafReadStore(
@@ -180,13 +187,16 @@ export function createHafReadStore(
 }
 
 /**
- * Ends the shared HAF pool (process shutdown). Safe if never opened.
+ * Ends all shared HAF pools (process shutdown). Safe if never opened.
+ * Clears the global map before awaiting `end()` so concurrent callers cannot
+ * reuse a pool that is shutting down.
  */
 export async function closeHafPool(): Promise<void> {
-  const existing = global.__hafPool;
-  if (!existing) return;
-  global.__hafPool = undefined;
-  await existing.pool.end();
+  const pools = global.__hafPools;
+  if (!pools || pools.size === 0) return;
+  const toClose = [...pools.values()];
+  global.__hafPools = undefined;
+  await Promise.all(toClose.map((pool) => pool.end()));
 }
 
 /** True when HAF_DATABASE_URL is present (does not open a connection). */

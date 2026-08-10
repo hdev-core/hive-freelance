@@ -4,7 +4,7 @@
 > **To:** Laure  
 > **Date:** 2026-07-30  
 > **Goal:** Connect shared / real HAF with minimal app changes  
-> **Related:** [`[03] Phase_A_HAF_Decision.md`](./[03]%20Phase_A_HAF_Decision.md) · [`[08] Phase_D_HAF_Read_Evidence.md`](./[08]%20Phase_D_HAF_Read_Evidence.md) · [`[01] Work plan`](./[01]%20Milestone_1_Hive_Layer_Work_Plan.md)
+> **Related:** [`[03] Phase_A_HAF_Decision.md`](../A/Phase_A_HAF_Decision.md) · [`[08] Phase_D_HAF_Read_Evidence.md`](Phase_D_HAF_Read_Evidence.md) · [`[01] Work plan`](../../[01]%20Milestone_1_Hive_Layer_Work_Plan.md)
 
 ---
 
@@ -46,10 +46,10 @@ Because shared Greateck HAF credentials were not available yet, Phase D shipped 
 
 | Path | Role |
 |------|------|
-| [`infra/haf-local/schema.sql`](../../../infra/haf-local/schema.sql) | **Temporary** local schema + seed |
-| [`infra/haf-local/bootstrap.mjs`](../../../infra/haf-local/bootstrap.mjs) | **Temporary** local bootstrap helper |
-| [`infra/haf-local/docker-init/01-create-hive-haf.sh`](../../../infra/haf-local/docker-init/01-create-hive-haf.sh) | **Temporary** first-volume Docker init |
-| SQL strings inside [`packages/hive/src/haf.ts`](../../../packages/hive/src/haf.ts) | **Semi-final** — keep module; **replace queries** if real HAF columns differ |
+| [`infra/haf-local/schema.sql`](../../../../../../infra/haf-local/schema.sql) | **Temporary** local schema + seed |
+| [`infra/haf-local/bootstrap.mjs`](../../../../../../infra/haf-local/bootstrap.mjs) | **Temporary** local bootstrap helper |
+| [`infra/haf-local/docker-init/01-create-hive-haf.sh`](../../../../../../infra/haf-local/docker-init/01-create-hive-haf.sh) | **Temporary** first-volume Docker init |
+| SQL strings inside [`packages/hive/src/haf.ts`](../../../../../../packages/hive/src/haf.ts) | **Semi-final** — keep module; **replace queries** if real HAF columns differ |
 
 **Not a stub:** the HTTP endpoints and package exports. They are meant to stay.
 
@@ -185,7 +185,7 @@ After your HAF Postgres is reachable:
    Set `HAF_DATABASE_URL` in the environment used by `apps/api` (and `.env.example` comments if the URL pattern changes).
 
 3. **Diff local SQL vs real SQL**  
-   Open [`packages/hive/src/haf.ts`](../../../packages/hive/src/haf.ts).  
+   Open [`packages/hive/src/haf.ts`](../../../../../../packages/hive/src/haf.ts).  
    Update only the three queries in `getAccount`, `getRecentAccountOps`, and `ping` (and mappers if column names differ).  
    Do **not** need to rewrite routes if the TypeScript return types stay compatible.
 
@@ -203,7 +203,7 @@ Expect `"source":"haf"` and real chain data (not `hfdemo` seed, unless that acco
 5. **Optional cleanup**  
    - Leave `infra/haf-local` for offline intern demos, or remove mounts from `docker-compose.yml` if you prefer no local fake HAF.  
    - Update `[08]` evidence with a real-account curl once available.  
-   - Sign off the blank block in [`[03] Phase_A_HAF_Decision.md`](./[03]%20Phase_A_HAF_Decision.md).
+   - Sign off the blank block in [`[03] Phase_A_HAF_Decision.md`](../A/Phase_A_HAF_Decision.md).
 
 6. **Do not**  
    - Point `DATABASE_URL` at HAF.  

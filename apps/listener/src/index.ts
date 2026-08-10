@@ -8,7 +8,7 @@ import {
   setListenerCursor,
   upsertHiveRecord,
 } from "@hive-freelance/db";
-import { createChain } from "@hive-freelance/hive";
+import { closeHiveChain, createChain } from "@hive-freelance/hive";
 import { filterBlockOps } from "./filter.js";
 import {
   resetMissedRatifications,
@@ -128,6 +128,7 @@ async function main(): Promise<void> {
 async function shutdown() {
   running = false;
   await closePrisma();
+  await closeHiveChain();
   process.exit(0);
 }
 
@@ -137,5 +138,6 @@ process.on("SIGTERM", () => void shutdown());
 main().catch(async (err) => {
   console.error(err);
   await closePrisma();
+  await closeHiveChain();
   process.exit(1);
 });
