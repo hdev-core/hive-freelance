@@ -1,0 +1,113 @@
+name: Build Gate
+
+on:
+  pull_request:
+    branches: [develop]
+
+concurrency:
+  group: build-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: postgresql://ci:ci@localhost:5432/hive_freelance_ci
+  DIRECT_URL: postgresql://ci:ci@localhost:5432/hive_freelance_ci
+
+jobs:
+  build-web:
+    name: build-web
+    runs-on: ubuntu-latest
+    needs: []
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - run: npm run build -w @hive-freelance/web
+
+  build-packages:
+    name: build-packages
+    runs-on: ubuntu-latest
+    needs: []
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - name: Build shared
+        run: npm run build -w @hive-freelance/shared
+
+      - name: Build db
+        run: npm run build -w @hive-freelance/db
+
+      - name: Build hive
+        run: npm run build -w @hive-freelance/hive
+
+      - name: Build provisioner
+        run: npm run build -w @hive-freelance/provisioner
+
+      - name: Upload packages dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-dist
+          retention-days: 1
+          path: |
+            packages/shared/dist
+            packages/db/dist
+            packages/hive/dist
+            apps/provisioner/dist
+
+  build-api:
+    name: build-api
+    runs-on: ubuntu-latest
+    needs: [build-packages]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Download packages dist
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-dist
+
+      - run: npm ci
+
+      - run: npm run build -w @hive-freelance/api
+
+  build-listener:
+    name: build-listener
+    runs-on: ubuntu-latest
+    needs: [build-packages]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Download packages dist
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-dist
+
+      - run: npm ci
+
+      - run: npm run build -w @hive-freelance/listener
