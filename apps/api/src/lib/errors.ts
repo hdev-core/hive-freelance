@@ -31,22 +31,30 @@ export function asyncHandler(
 //     with no `code`/`meta`, just the Postgres error text in `message`.
 // Both must be caught here, or the second case falls through to the generic
 // 500 handler and leaks the raw Postgres error message to the client.
+//
+// This must match on structured fields, not free text: PrismaClientUnknownRequestError's
+// `message` embeds Postgres' DETAIL line, which includes the user's own submitted
+// field values (e.g. a profile bio) — a free-text/regex search over the whole message
+// lets a user spoof a 409 by putting the trigger phrase in their own data. The driver's
+// `PostgresError { code: "40P01"` prefix precedes any user-supplied data in the message,
+// so anchoring on it is safe.
 export function isDeadlock(err: unknown): boolean {
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     return (
-      err.code === "P2010" &&
-      (err.meta as { code?: string } | undefined)?.code === "40P01"
+      err.code === "P2034" ||
+      (err.code === "P2010" &&
+        (err.meta as { code?: string } | undefined)?.code === "40P01")
     );
   }
   if (err instanceof Prisma.PrismaClientUnknownRequestError) {
-    return /40P01|deadlock detected/i.test(err.message);
+    return /PostgresError \{ code: "40P01"/.test(err.message);
   }
   return false;
 }
 
 export function errorHandler(
   err: unknown,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction,
 ): void {
@@ -81,6 +89,9 @@ export function errorHandler(
   }
 
   if (isDeadlock(err)) {
+    console.warn(
+      `[deadlock] ${req.method} ${req.originalUrl} params=${JSON.stringify(req.params)}`,
+    );
     res.status(409).json({
       error: "This action conflicted with another request in progress. Please try again.",
       code: "DEADLOCK",
