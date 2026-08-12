@@ -9,6 +9,14 @@ import { AppError } from "./errors.js";
  * deleteJob, updateJob, and cancelContract all rely on to avoid
  * deadlocking against each other.
  *
+ * These five are not the complete set of paths that mutate job-scoped
+ * state — completeContract, rejectProposal, withdrawProposal,
+ * submitProposal, createMilestone, and fundMilestone all do too, and
+ * none of them go through this helper (or any lock) yet. Don't treat
+ * "locked via this helper" as "the only path that touches this data" —
+ * that gap is exactly what let the withdraw/reject-vs-accept race
+ * through (see the comment on withdrawProposal in proposals.ts).
+ *
  * Deliberately doesn't check ownership or status itself — different
  * callers allow different statuses and want different error messages
  * (e.g. cancelJob allows open/in_progress, deleteJob only open), so
