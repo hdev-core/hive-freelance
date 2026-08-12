@@ -57,13 +57,14 @@ export function getJob(id: string): Promise<JobDetailResponse> {
 }
 
 /** Public browse — matches GET /jobs' real query contract (category/skill
- * are each single-valued, budget_min/budget_max filter server-side). No
- * escrow-funded filter: that was funding_status, which never had a real
+ * are each single-valued; keyword, budget_min/budget_max filter server-side).
+ * No escrow-funded filter: that was funding_status, which never had a real
  * backing field (see the file header). */
 export function listJobs(
   params: {
     category?: string;
     skill?: string;
+    keyword?: string;
     budget_min?: number;
     budget_max?: number;
     limit?: number;
@@ -72,6 +73,7 @@ export function listJobs(
   const query = new URLSearchParams();
   if (params.category) query.set("category", params.category);
   if (params.skill) query.set("skill", params.skill);
+  if (params.keyword) query.set("keyword", params.keyword);
   if (params.budget_min != null) query.set("budget_min", String(params.budget_min));
   if (params.budget_max != null) query.set("budget_max", String(params.budget_max));
   if (params.limit != null) query.set("limit", String(params.limit));

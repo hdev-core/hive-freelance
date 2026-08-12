@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { PageHeader, Card, Select } from "../components/ui";
 import { FilterSidebar, JobListCard, type BudgetRangeValue } from "../components/marketplace";
@@ -39,11 +39,13 @@ function JobCardSkeleton() {
 }
 
 export function JobsListPage() {
-  const [rawItems, setRawItems] = useState<JobListItem[]>([]);
+  const [items, setItems] = useState<JobListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
+  const keyword = deferredSearch.trim() || undefined;
   const [category, setCategory] = useState<string | null>(null);
   const [skill, setSkill] = useState<string | null>(null);
   const [budgetRange, setBudgetRange] = useState<BudgetRangeValue>("any");
@@ -55,11 +57,12 @@ export function JobsListPage() {
     listJobs({
       category: category ?? undefined,
       skill: skill ?? undefined,
+      keyword,
       ...budgetRangeToQuery(budgetRange),
       limit: 50,
     })
       .then((data) => {
-        if (!cancelled) setRawItems(data.items);
+        if (!cancelled) setItems(data.items);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load jobs");
@@ -70,7 +73,7 @@ export function JobsListPage() {
     return () => {
       cancelled = true;
     };
-  }, [category, skill, budgetRange]);
+  }, [category, skill, budgetRange, keyword]);
 
   // Derived from the currently loaded page, not a dedicated facets endpoint
   // (none exists) — same approach the old mock version used, just actually
@@ -78,36 +81,26 @@ export function JobsListPage() {
   // filters.
   const categories = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const job of rawItems) {
+    for (const job of items) {
       if (!job.category) continue;
       counts.set(job.category, (counts.get(job.category) ?? 0) + 1);
     }
     return Array.from(counts.entries()).map(([label, count]) => ({ label, count }));
-  }, [rawItems]);
+  }, [items]);
 
   const skills = useMemo(() => {
     const set = new Set<string>();
-    for (const job of rawItems) {
+    for (const job of items) {
       for (const s of job.skills_required ?? []) set.add(s);
     }
     return Array.from(set).sort();
-  }, [rawItems]);
-
-  const visibleItems = useMemo(() => {
-    if (!search.trim()) return rawItems;
-    const q = search.trim().toLowerCase();
-    return rawItems.filter((job) => {
-      const inTitle = job.title.toLowerCase().includes(q);
-      const inSkills = (job.skills_required ?? []).some((s) => s.toLowerCase().includes(q));
-      return inTitle || inSkills;
-    });
-  }, [rawItems, search]);
+  }, [items]);
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Find your next contract"
-        subtitle={`${visibleItems.length} job${visibleItems.length === 1 ? "" : "s"} match your filters · all payments escrow-protected`}
+        subtitle={`${items.length} job${items.length === 1 ? "" : "s"} match your filters · all payments escrow-protected`}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[17.5rem_1fr]">
@@ -156,13 +149,13 @@ export function JobsListPage() {
             </div>
           )}
 
-          {!loading && !error && visibleItems.length === 0 && (
+          {!loading && !error && items.length === 0 && (
             <Card className="py-12 text-center text-sm text-text-secondary">No jobs match your filters right now.</Card>
           )}
 
           {!loading &&
             !error &&
-            visibleItems.map((job) => <JobListCard key={job.id} job={job} />)}
+            items.map((job) => <JobListCard key={job.id} job={job} />)}
         </div>
       </div>
     </div>

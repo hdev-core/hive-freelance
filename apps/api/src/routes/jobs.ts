@@ -16,6 +16,7 @@ export const jobsRouter = Router();
 
 const JOB_STATUSES = ["open", "in_progress", "completed", "cancelled"] as const;
 const jobStatusSchema = z.enum(JOB_STATUSES);
+const KEYWORD_MAX_LEN = 100;
 
 // Parses an optional positive-number query param (e.g. budget_min/max).
 // Throws a clean 400 on garbage input instead of passing NaN through to
@@ -30,6 +31,19 @@ function positiveNumberQueryParam(
     throw new AppError(400, `${name} must be a positive number`);
   }
   return n;
+}
+
+function keywordQueryParam(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  const keyword = String(value).trim();
+  if (!keyword) return undefined;
+  if (keyword.length > KEYWORD_MAX_LEN) {
+    throw new AppError(
+      400,
+      `keyword must be at most ${KEYWORD_MAX_LEN} characters`,
+    );
+  }
+  return keyword;
 }
 
 jobsRouter.get(
@@ -69,6 +83,7 @@ jobsRouter.get(
         ? String(req.query.category)
         : undefined,
       skill: req.query.skill ? String(req.query.skill) : undefined,
+      keyword: keywordQueryParam(req.query.keyword),
       // Only defaulted to "open" for the public browse case — a client_id
       // filter means "my posted jobs," which should show every status.
       // See listJobs' own status-defaulting for the client_id branch.
