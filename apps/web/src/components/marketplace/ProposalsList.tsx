@@ -2,28 +2,36 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { FileText } from "lucide-react";
 import { Badge, Card } from "../ui";
-import { listProposalsForJob, type ProposalRow, type ProposalStatus } from "../../services/proposalsService";
+import {
+  listProposalsForJob,
+  type ProposalStatus,
+  type ProposalWithFreelancer,
+} from "../../services/proposalsService";
 import { formatRelativeTime } from "../../lib/formatRelativeTime";
+import { freelancerDisplayName } from "../../lib/proposalDisplay";
 
 /**
- * Client-facing proposal list/comparison for the job detail page. Takes only
- * `jobId`, not the job object itself, and fetches real proposal data
- * independently of however the job itself was loaded. JobDetailPage.tsx now
- * uses the real Jobs API (jobDetailService.ts) for job data, but this
- * component never depended on that shape in the first place — no change
- * needed here when that swap happened.
+ * Client-facing proposal preview for the job detail page — only ever shows
+ * the most recent proposal (see ProposalCard below), so it fetches just
+ * that one row (limit: 1) instead of the whole list. `proposalCount` is the
+ * real total (job.proposalCount, from GET /jobs/:id's aggregate), used for
+ * the header count and "View all N" link since a single-item page can't
+ * tell us that itself. JobDetailPage.tsx now uses the real Jobs API
+ * (jobDetailService.ts) for job data, but this component never depended on
+ * that shape in the first place — no change needed here when that swap
+ * happened.
  */
-export function ProposalsList({ jobId }: { jobId: string }) {
-  const [proposals, setProposals] = useState<ProposalRow[] | null>(null);
+export function ProposalsList({ jobId, proposalCount }: { jobId: string; proposalCount: number }) {
+  const [proposal, setProposal] = useState<ProposalWithFreelancer | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setProposals(null);
+    setProposal(undefined);
     setError(null);
-    listProposalsForJob(jobId)
+    listProposalsForJob(jobId, { limit: 1 })
       .then((res) => {
-        if (!cancelled) setProposals(res.items);
+        if (!cancelled) setProposal(res.items[0] ?? null);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load proposals");
@@ -42,7 +50,7 @@ export function ProposalsList({ jobId }: { jobId: string }) {
     );
   }
 
-  if (!proposals) {
+  if (proposal === undefined) {
     return (
       <Card className="animate-pulse">
         <div className="h-4 w-32 rounded bg-surface-muted" />
@@ -60,26 +68,26 @@ export function ProposalsList({ jobId }: { jobId: string }) {
         <div>
           <h2 className="flex items-baseline gap-1.5 text-base font-semibold text-text-primary">
             Proposals
-            <span className="text-sm font-normal text-text-muted">{proposals.length}</span>
+            <span className="text-sm font-normal text-text-muted">{proposalCount}</span>
           </h2>
           <p className="text-xs text-text-secondary">Compare freelancer bids, timelines, and milestone breakdowns.</p>
         </div>
       </div>
 
-      {proposals.length === 0 ? (
+      {proposalCount === 0 || !proposal ? (
         <p className="text-sm text-text-secondary">No proposals yet.</p>
       ) : (
         <div className="flex flex-col gap-3">
           {/* Most recent only — a preview, not the full comparison list.
-              listProposalsForJob already orders by createdAt desc, so
-              proposals[0] is the latest. */}
-          <ProposalCard proposal={proposals[0]} />
-          {proposals.length > 1 && (
+              listProposalsForJob orders by createdAt desc, so a single-item
+              page (limit: 1) is already the latest proposal. */}
+          <ProposalCard proposal={proposal} />
+          {proposalCount > 1 && (
             <Link
               to={`/client/jobs/${jobId}/proposals`}
               className="text-xs font-medium text-accent hover:underline"
             >
-              View all {proposals.length} proposals &rarr;
+              View all {proposalCount} proposals &rarr;
             </Link>
           )}
         </div>
@@ -101,12 +109,12 @@ export const proposalStatusLabel: Record<ProposalStatus, string> = {
   rejected: "Rejected",
 };
 
-function ProposalCard({ proposal }: { proposal: ProposalRow }) {
+function ProposalCard({ proposal }: { proposal: ProposalWithFreelancer }) {
   return (
     <div className="rounded-xl border border-border p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold text-text-primary">Freelancer #{proposal.freelancer_id}</p>
+          <p className="text-sm font-semibold text-text-primary">{freelancerDisplayName(proposal)}</p>
           <p className="text-xs text-text-muted">{formatRelativeTime(new Date(proposal.created_at))}</p>
         </div>
         <div className="flex items-center gap-2">
