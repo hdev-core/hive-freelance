@@ -9,16 +9,28 @@ import {
   Prisma,
 } from "@hive-freelance/db";
 import { AppError } from "../lib/errors.js";
+import { assertNotSelfContract } from "../middleware/auth.js";
 import { lockJobForUpdate } from "../lib/locks.js";
 import { getJob } from "./jobs.js";
 
 const milestonesOrder = { orderBy: { milestoneOrder: "asc" as const } };
 
-export async function listProposalsForJob(jobId: string, clientId: string) {
+export async function listProposalsForJob(
+  jobId: string,
+  clientId: string,
+  opts?: { page?: number; limit?: number },
+) {
   const job = await getJob(jobId);
   if (job.client_id !== clientId) {
     throw new AppError(403, "Only the job client can list proposals");
   }
+
+  // Same page/limit clamping as listJobs (services/jobs.ts): limit capped at
+  // 50, page floored at 1.
+  const page = Math.max(1, opts?.page ?? 1);
+  const limit = Math.min(50, Math.max(1, opts?.limit ?? 20));
+  const skip = (page - 1) * limit;
+
   const proposals = await prisma.proposal.findMany({
     where: { jobId: BigInt(jobId) },
     include: {
@@ -31,6 +43,8 @@ export async function listProposalsForJob(jobId: string, clientId: string) {
       },
     },
     orderBy: { createdAt: "desc" },
+    take: limit,
+    skip,
   });
 
   // Batched rating aggregate, same pattern as listJobs's client_rating: one
@@ -48,7 +62,7 @@ export async function listProposalsForJob(jobId: string, clientId: string) {
     ratings.map((r) => [r.revieweeId.toString(), { average: r._avg.rating, count: r._count.rating }]),
   );
 
-  return proposals.map((p) => {
+  const items = proposals.map((p) => {
     const rating = ratingByFreelancerId.get(p.freelancerId.toString()) ?? { average: null, count: 0 };
     return {
       ...toProposalRow(p),
@@ -66,6 +80,8 @@ export async function listProposalsForJob(jobId: string, clientId: string) {
       },
     };
   });
+
+  return { items, page, limit };
 }
 
 /**
@@ -124,9 +140,7 @@ export async function submitProposal(
   if (job.status !== "open") {
     throw new AppError(400, "Job is not open for proposals");
   }
-  if (job.client_id === freelancerId) {
-    throw new AppError(403, "Cannot propose on your own job");
-  }
+  assertNotSelfContract(job.client_id, freelancerId);
 
   // Milestone amounts are the bid's breakdown — they must add up to exactly
   // what the client sees as the total bid, same rule the mockup's sidebar
@@ -347,22 +361,20 @@ export async function acceptProposal(proposalId: string, clientId: string) {
         orderBy: { milestoneOrder: "asc" },
       });
 
-      if (job.status !== "open") {
-        throw new AppError(409, "This job is no longer open.");
-      }
+      // Ownership checked first, before any job/proposal state is revealed —
+      // same ordering fix as getAcceptCustomJson, otherwise a non-owner
+      // client could probe a proposal id and learn whether the job is still
+      // open or the proposal still pending before hitting a 403.
       if (job.client_id !== clientId) {
         throw new AppError(403, "Only the job client can accept");
+      }
+      if (job.status !== "open") {
+        throw new AppError(409, "This job is no longer open.");
       }
       if (proposal.status !== "pending") {
         throw new AppError(400, "Proposal is not pending");
       }
-      if (job.client_id === proposal.freelancerId.toString()) {
-        throw new AppError(
-          403,
-          "Cannot be both client and freelancer on the same contract",
-          "SELF_CONTRACT",
-        );
-      }
+      assertNotSelfContract(job.client_id, proposal.freelancerId.toString());
 
       await tx.proposal.update({
         where: { id: proposal.id },

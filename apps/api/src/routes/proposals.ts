@@ -39,8 +39,12 @@ jobProposalsRouter.get(
   requireAuth,
   requireClient,
   asyncHandler(async (req, res) => {
-    const rows = await listProposalsForJob(param(req, "id"), req.user!.id);
-    res.json({ items: rows });
+    // Same page/limit query contract as GET /jobs (routes/jobs.ts).
+    const result = await listProposalsForJob(param(req, "id"), req.user!.id, {
+      page: req.query.page ? Number(req.query.page) : undefined,
+      limit: req.query.limit ? Number(req.query.limit) : undefined,
+    });
+    res.json(result);
   }),
 );
 
@@ -90,21 +94,26 @@ const proposalMilestoneSchema = z.object({
   duration: z.string().min(1).max(50),
 });
 
+// 100_000 chars mirrors the ~100KB ceiling express.json() already enforces
+// on every request body (index.ts) — this makes the cap explicit and
+// documented at the field level instead of relying implicitly on the
+// body-parser default, which would apply to the whole payload (milestones,
+// portfolio links, etc.), not just this one field.
+export const submitProposalBodySchema = z.object({
+  cover_letter: z.string().min(1).max(100_000),
+  bid_amount: centsAmount,
+  estimated_duration: z.string().max(50).nullable().optional(),
+  available_to_start: z.string().max(50).nullable().optional(),
+  portfolio_links: z.array(portfolioLinkSchema).max(10).nullable().optional(),
+  milestones: z.array(proposalMilestoneSchema).min(1).max(20),
+});
+
 jobProposalsRouter.post(
   "/",
   requireAuth,
   requireFreelancer,
   asyncHandler(async (req, res) => {
-    const body = z
-      .object({
-        cover_letter: z.string().min(1),
-        bid_amount: centsAmount,
-        estimated_duration: z.string().max(50).nullable().optional(),
-        available_to_start: z.string().max(50).nullable().optional(),
-        portfolio_links: z.array(portfolioLinkSchema).max(10).nullable().optional(),
-        milestones: z.array(proposalMilestoneSchema).min(1).max(20),
-      })
-      .parse(req.body);
+    const body = submitProposalBodySchema.parse(req.body);
     const proposal = await submitProposal(param(req, "id"), req.user!.id, body);
     res.status(201).json(proposal);
   }),
