@@ -21,9 +21,40 @@ export function asyncHandler(
   };
 }
 
+// Postgres deadlock (SQLSTATE 40P01) from a raw query inside a transaction
+// (e.g. two concurrent accepts lock-ordering against each other). Depending
+// on which call inside the transaction is the deadlock victim, Prisma
+// surfaces this two different ways:
+//   - a raw query (e.g. $queryRaw) -> PrismaClientKnownRequestError P2010
+//     "Raw query failed" with the raw db code in `meta.code`.
+//   - a query-builder call (e.g. updateMany) -> PrismaClientUnknownRequestError
+//     with no `code`/`meta`, just the Postgres error text in `message`.
+// Both must be caught here, or the second case falls through to the generic
+// 500 handler and leaks the raw Postgres error message to the client.
+//
+// This must match on structured fields, not free text: PrismaClientUnknownRequestError's
+// `message` embeds Postgres' DETAIL line, which includes the user's own submitted
+// field values (e.g. a profile bio) — a free-text/regex search over the whole message
+// lets a user spoof a 409 by putting the trigger phrase in their own data. The driver's
+// `PostgresError { code: "40P01"` prefix precedes any user-supplied data in the message,
+// so anchoring on it is safe.
+export function isDeadlock(err: unknown): boolean {
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    return (
+      err.code === "P2034" ||
+      (err.code === "P2010" &&
+        (err.meta as { code?: string } | undefined)?.code === "40P01")
+    );
+  }
+  if (err instanceof Prisma.PrismaClientUnknownRequestError) {
+    return /PostgresError \{ code: "40P01"/.test(err.message);
+  }
+  return false;
+}
+
 export function errorHandler(
   err: unknown,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction,
 ): void {
@@ -57,17 +88,10 @@ export function errorHandler(
     return;
   }
 
-  // Postgres deadlock (SQLSTATE 40P01) from a raw query inside a
-  // transaction (e.g. two concurrent accepts lock-ordering against each
-  // other) — Prisma wraps this as P2010 "Raw query failed" with the raw db
-  // code in `meta`. Without this, it falls through to the generic 500
-  // below and leaks the raw Postgres error message (including internal
-  // process/transaction IDs) straight to the client.
-  if (
-    err instanceof Prisma.PrismaClientKnownRequestError &&
-    err.code === "P2010" &&
-    (err.meta as { code?: string } | undefined)?.code === "40P01"
-  ) {
+  if (isDeadlock(err)) {
+    console.warn(
+      `[deadlock] ${req.method} ${req.originalUrl} params=${JSON.stringify(req.params)}`,
+    );
     res.status(409).json({
       error: "This action conflicted with another request in progress. Please try again.",
       code: "DEADLOCK",
@@ -76,6 +100,5 @@ export function errorHandler(
   }
 
   console.error(err);
-  const message = err instanceof Error ? err.message : "Internal server error";
-  res.status(500).json({ error: message });
+  res.status(500).json({ error: "Internal server error" });
 }
