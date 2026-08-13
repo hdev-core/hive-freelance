@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Request, Response } from "express";
+import createHttpError from "http-errors";
 import { Prisma } from "@hive-freelance/db";
 import { errorHandler, isDeadlock } from "./errors.js";
 
@@ -83,5 +84,34 @@ test("errorHandler maps a PrismaClientUnknownRequestError deadlock to 409, not 5
   assert.deepEqual(res.body, {
     error: "This action conflicted with another request in progress. Please try again.",
     code: "DEADLOCK",
+  });
+});
+
+test("errorHandler maps body-parser's PayloadTooLargeError to a clean 413, not 500", () => {
+  // Same shape raw-body/body-parser actually throws when express.json()'s
+  // body-size limit is exceeded (e.g. a multi-byte cover_letter well under
+  // a character cap but over the 100KB byte one) — status/statusCode 413,
+  // type "entity.too.large". Before this branch existed, this fell through
+  // to the generic 500 handler and leaked "PayloadTooLargeError: request
+  // entity too large" to the client.
+  const err = createHttpError(413, "request entity too large", {
+    length: 200_000,
+    limit: 102_400,
+    expected: 200_000,
+    type: "entity.too.large",
+  });
+  const res = createMockResponse();
+
+  errorHandler(
+    err,
+    { method: "POST", originalUrl: "/api/v1/jobs/1/proposals", params: {} } as Request,
+    res as unknown as Response,
+    () => {},
+  );
+
+  assert.equal(res.statusCode, 413);
+  assert.deepEqual(res.body, {
+    error: "Request body is too large",
+    code: "PAYLOAD_TOO_LARGE",
   });
 });

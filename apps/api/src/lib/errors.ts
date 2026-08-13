@@ -88,6 +88,25 @@ export function errorHandler(
     return;
   }
 
+  // body-parser payload-too-large (raw-body's PayloadTooLargeError, thrown
+  // by express.json() whenever the raw request body exceeds its 100KB
+  // default before any route or Zod schema ever sees it — e.g. a
+  // multi-byte cover_letter that's under a character-count cap but well
+  // over the byte one). Same shape as entity.parse.failed above, just a
+  // 413 instead of a 400. Not field-specific — this is a whole-request
+  // limit, so it's caught here rather than in any one route, and this
+  // failure mode isn't unique to proposals; any oversized body anywhere
+  // in the app would otherwise fall through to the raw 500 below.
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    "type" in err &&
+    (err as { type?: string }).type === "entity.too.large"
+  ) {
+    res.status(413).json({ error: "Request body is too large", code: "PAYLOAD_TOO_LARGE" });
+    return;
+  }
+
   if (isDeadlock(err)) {
     console.warn(
       `[deadlock] ${req.method} ${req.originalUrl} params=${JSON.stringify(req.params)}`,
