@@ -242,9 +242,22 @@ export function JobProposalsPage() {
       )}
 
       {!error && proposals && (
-        <p className="text-sm text-text-secondary">
-          Showing {visible.length} proposal{visible.length === 1 ? "" : "s"}
-        </p>
+        <div className="flex flex-col gap-1">
+          <p className="text-sm text-text-secondary">
+            Showing {visible.length} proposal{visible.length === 1 ? "" : "s"}
+          </p>
+          {/* This page loads at most 50 proposals (listProposalsForJob's page
+              cap) and does all tab/sort filtering over that loaded set — for
+              a job with more than 50, the header's real job.proposalCount and
+              the tab counts below it would otherwise silently disagree with
+              no explanation. */}
+          {job && proposals.length < job.proposalCount && (
+            <p className="text-xs text-warning-text">
+              Only the first {proposals.length} of {job.proposalCount} proposals are loaded — tabs, sorting, and
+              counts on this page only reflect those {proposals.length}.
+            </p>
+          )}
+        </div>
       )}
 
       {actionError && (
