@@ -94,13 +94,25 @@ const proposalMilestoneSchema = z.object({
   duration: z.string().min(1).max(50),
 });
 
-// 100_000 chars mirrors the ~100KB ceiling express.json() already enforces
-// on every request body (index.ts) — this makes the cap explicit and
-// documented at the field level instead of relying implicitly on the
-// body-parser default, which would apply to the whole payload (milestones,
-// portfolio links, etc.), not just this one field.
+// A character-count cap (the original approach here) doesn't protect
+// against multi-byte UTF-8: 60,000 CJK characters is ~180KB, three times
+// over express.json()'s 100KB *byte* default on the whole request body
+// (index.ts) — well past that limit despite being far under a 100,000-char
+// cap. Bounding on Buffer.byteLength instead, at 50,000 bytes (half the
+// body-parser ceiling, leaving headroom for the rest of the payload —
+// milestones, portfolio_links, etc.), means an oversized cover_letter gets
+// a specific, actionable 400 from Zod before it has any chance of tripping
+// body-parser's blunt whole-request 413.
+const MAX_COVER_LETTER_BYTES = 50_000;
+const coverLetterSchema = z
+  .string()
+  .min(1)
+  .refine((v) => Buffer.byteLength(v, "utf8") <= MAX_COVER_LETTER_BYTES, {
+    message: `cover_letter must not exceed ${MAX_COVER_LETTER_BYTES} bytes (UTF-8)`,
+  });
+
 export const submitProposalBodySchema = z.object({
-  cover_letter: z.string().min(1).max(100_000),
+  cover_letter: coverLetterSchema,
   bid_amount: centsAmount,
   estimated_duration: z.string().max(50).nullable().optional(),
   available_to_start: z.string().max(50).nullable().optional(),

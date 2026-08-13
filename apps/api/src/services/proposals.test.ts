@@ -50,17 +50,31 @@ async function assertRejectsWith(
   });
 }
 
-test("submitProposalBodySchema bounds cover_letter length", () => {
+test("submitProposalBodySchema bounds cover_letter by UTF-8 byte length, not character count", () => {
   const base = {
     bid_amount: 100,
     milestones: [{ title: "M1", amount: 100, duration: "1 week" }],
   };
 
-  const ok = submitProposalBodySchema.safeParse({ ...base, cover_letter: "x".repeat(100_000) });
-  assert.equal(ok.success, true);
+  // 50,000 single-byte chars = 50,000 bytes: right at the cap, still ok.
+  const okAscii = submitProposalBodySchema.safeParse({ ...base, cover_letter: "x".repeat(50_000) });
+  assert.equal(okAscii.success, true);
 
-  const tooLong = submitProposalBodySchema.safeParse({ ...base, cover_letter: "x".repeat(100_001) });
-  assert.equal(tooLong.success, false);
+  const tooLongAscii = submitProposalBodySchema.safeParse({ ...base, cover_letter: "x".repeat(50_001) });
+  assert.equal(tooLongAscii.success, false);
+
+  // The bug this closes: a character-count cap doesn't see multi-byte
+  // content coming. 15,000 CJK chars is 45,000 UTF-8 bytes — under the
+  // byte cap despite being nowhere near the old 100,000-char one either
+  // way, so this is really pinning the *byte* math, not just re-testing
+  // the same boundary in a different alphabet.
+  const okCjk = submitProposalBodySchema.safeParse({ ...base, cover_letter: "測".repeat(15_000) });
+  assert.equal(okCjk.success, true);
+
+  // 20,000 CJK chars = 60,000 UTF-8 bytes: over the 50,000-byte cap, but
+  // only 20,000 *characters* — the old cap would have waved this through.
+  const tooLongCjk = submitProposalBodySchema.safeParse({ ...base, cover_letter: "測".repeat(20_000) });
+  assert.equal(tooLongCjk.success, false);
 });
 
 test("listProposalsForJob paginates like listJobs (page/limit, capped at 50, newest first)", async () => {
