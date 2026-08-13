@@ -6,6 +6,7 @@ import { SkillTag, JobDetailSidebar, ProposalsList, StatusBadge } from "../compo
 import { getJob } from "../services/jobDetailService";
 import { formatRelativeTime } from "../lib/formatRelativeTime";
 import { formatBudget } from "../lib/formatBudget";
+import { canViewJobProposals } from "../lib/permissions";
 import { useSession } from "../hooks/useSession";
 
 type JobDetail = Awaited<ReturnType<typeof getJob>>;
@@ -153,7 +154,9 @@ export function JobDetailPage() {
               </p>
             </Card>
 
-            {id && (user?.role === "client" || user?.role === "both") && <ProposalsList jobId={id} />}
+            {id && canViewJobProposals(user, job) && (
+              <ProposalsList jobId={id} proposalCount={job.proposalCount} />
+            )}
           </div>
 
           <JobDetailSidebar job={job} onCancelled={setJob} />
