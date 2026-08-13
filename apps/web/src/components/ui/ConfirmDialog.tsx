@@ -49,6 +49,20 @@ export function ConfirmDialog({
     };
   }, [open]);
 
+  // A disabled button can't hold DOM focus — the instant `busy` flips true
+  // and both buttons get `disabled`, the browser blurs whichever one had
+  // focus back to <body>. Left alone, the next Tab would resume native tab
+  // order from <body> and walk straight out of the modal into the page
+  // behind it (the trap below has nothing to cycle between at that point —
+  // zero enabled elements). Re-anchor focus on the dialog container itself
+  // (tabIndex={-1}: programmatically focusable, not in normal tab order)
+  // so focus has somewhere to legitimately live for the trap to pin.
+  useEffect(() => {
+    if (open && busy) {
+      dialogRef.current?.focus();
+    }
+  }, [open, busy]);
+
   // Separate effect so the listener re-subscribes with the current `busy`
   // value instead of closing over whatever it was when the dialog opened —
   // otherwise a keypress after busy flips true/false still uses the stale
@@ -57,26 +71,33 @@ export function ConfirmDialog({
     if (!open) return;
 
     function onKeyDown(e: KeyboardEvent) {
-      if (busy) return;
       if (e.key === "Escape") {
-        onCancel();
+        if (!busy) onCancel();
         return;
       }
-      if (e.key === "Tab") {
-        const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        );
-        if (!focusable || focusable.length === 0) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        const active = document.activeElement;
-        if (e.shiftKey && active === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && active === last) {
-          e.preventDefault();
-          first.focus();
-        }
+      if (e.key !== "Tab") return;
+
+      // While busy there are zero enabled elements to cycle between —
+      // pin Tab outright instead of trying to find a first/last among
+      // nothing, which is what silently let focus escape before.
+      if (busy) {
+        e.preventDefault();
+        return;
+      }
+
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -94,11 +115,12 @@ export function ConfirmDialog({
       />
       <div
         ref={dialogRef}
+        tabIndex={-1}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby={description ? "confirm-dialog-description" : undefined}
-        className="animate-modal-in relative flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-border bg-surface p-6 shadow-elevate"
+        className="animate-modal-in relative flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-border bg-surface p-6 shadow-elevate outline-none"
       >
         <div>
           <h2 id="confirm-dialog-title" className="text-base font-semibold text-text-primary">
