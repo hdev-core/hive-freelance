@@ -1,5 +1,6 @@
 import { prisma, toJobRow, type JobRow } from "@hive-freelance/db";
 import { AppError } from "../lib/errors.js";
+import { lockJobForUpdate } from "../lib/locks.js";
 
 export async function listJobs(opts: {
   category?: string;
@@ -134,29 +135,45 @@ export async function updateJob(
     skills_required: string[] | null;
   }>,
 ): Promise<JobRow> {
-  const job = await getJob(jobId);
-  if (job.client_id !== clientId) {
-    throw new AppError(403, "Not job owner");
-  }
-  if (job.status !== "open") {
-    throw new AppError(400, "Only open jobs can be edited");
-  }
+  // Same lock-first pattern as cancelJob/deleteJob, for consistency — a
+  // stale read here can't cascade-destroy anything (the contract carries
+  // the proposal's bid amount, not jobs.budget), but leaving this as the
+  // one un-fixed stale read in the file is exactly how it gets
+  // reintroduced by copy-paste later.
+  const updated = await prisma.$transaction(
+    async (tx) => {
+      const job = await lockJobForUpdate(tx, jobId);
+      if (job.client_id !== clientId) {
+        throw new AppError(403, "Not job owner");
+      }
+      if (job.status !== "open") {
+        throw new AppError(400, "Only open jobs can be edited");
+      }
 
-  // Same COALESCE-on-update quirk as the original: a field is only written
-  // if provided and non-null. Category/skills_required could never actually
-  // be cleared to NULL in the original either — preserved as-is, not fixed.
-  const updateData: Record<string, unknown> = {};
-  if (data.title != null) updateData.title = data.title;
-  if (data.description != null) updateData.description = data.description;
-  if (data.budget != null) updateData.budget = data.budget;
-  if (data.category != null) updateData.category = data.category;
-  if (data.skills_required != null)
-    updateData.skillsRequired = data.skills_required;
+      // Same COALESCE-on-update quirk as the original: a field is only
+      // written if provided and non-null. Category/skills_required could
+      // never actually be cleared to NULL in the original either —
+      // preserved as-is, not fixed.
+      const updateData: Record<string, unknown> = {};
+      if (data.title != null) updateData.title = data.title;
+      if (data.description != null) updateData.description = data.description;
+      if (data.budget != null) updateData.budget = data.budget;
+      if (data.category != null) updateData.category = data.category;
+      if (data.skills_required != null)
+        updateData.skillsRequired = data.skills_required;
 
-  const updated = await prisma.job.update({
-    where: { id: BigInt(jobId) },
-    data: updateData,
-  });
+      return tx.job.update({
+        where: { id: BigInt(jobId) },
+        data: updateData,
+      });
+    },
+    // Same 15000ms as cancelJob/deleteJob/acceptProposal/cancelContract —
+    // was inconsistently left on the 5000ms default here, which would
+    // P2028 under the same real-world pooled-connection latency that
+    // motivated the others.
+    { timeout: 15000 },
+  );
+
   return toJobRow(updated);
 }
 
@@ -164,20 +181,55 @@ export async function cancelJob(
   jobId: string,
   clientId: string,
 ): Promise<JobRow> {
-  const job = await getJob(jobId);
-  if (job.client_id !== clientId) {
-    throw new AppError(403, "Not job owner");
-  }
-  if (job.status !== "open" && job.status !== "in_progress") {
-    throw new AppError(
-      400,
-      "Only open or in-progress jobs can be cancelled",
-    );
-  }
-  const updated = await prisma.job.update({
-    where: { id: BigInt(jobId) },
-    data: { status: "cancelled" },
-  });
+  const updated = await prisma.$transaction(
+    async (tx) => {
+      // Lock the job row FIRST, as the very first statement in this
+      // transaction — same order acceptProposal uses. Prevents deadlock
+      // ordering against acceptProposal, and closes the stale-status
+      // TOCTOU a separate getJob() call before the transaction would
+      // otherwise allow.
+      const job = await lockJobForUpdate(tx, jobId);
+      if (job.client_id !== clientId) {
+        throw new AppError(403, "Not job owner");
+      }
+      if (job.status !== "open" && job.status !== "in_progress") {
+        throw new AppError(
+          400,
+          "Only open or in-progress jobs can be cancelled",
+        );
+      }
+
+      // Product decision (Mohammad, 2026-08-12): cancelling a job must
+      // NOT cascade-cancel an active contract. A contract can have
+      // funded milestones — real escrow on Hive holding real HBD — and
+      // an implicit cascade lets one click strand money a freelancer has
+      // already worked against, with nothing in the flow saying so.
+      // Cancelling the contract is now a separate, deliberate act
+      // (cancelContract) the client has to take first; this function
+      // just refuses outright while one exists, regardless of whether
+      // any milestone is actually funded — an active contract with no
+      // funded milestone still represents a real agreement with a
+      // freelancer, not just an escrow-holding concern.
+      const activeContract = await tx.contract.findFirst({
+        where: { jobId: BigInt(jobId), status: "active" },
+        select: { id: true },
+      });
+      if (activeContract) {
+        throw new AppError(
+          409,
+          "This job has an active contract — cancel the contract before cancelling the job.",
+        );
+      }
+
+      return tx.job.update({
+        where: { id: BigInt(jobId) },
+        data: { status: "cancelled" },
+      });
+    },
+    // Same 15000ms as the other four job-locking paths.
+    { timeout: 15000 },
+  );
+
   return toJobRow(updated);
 }
 
@@ -185,12 +237,27 @@ export async function deleteJob(
   jobId: string,
   clientId: string,
 ): Promise<void> {
-  const job = await getJob(jobId);
-  if (job.client_id !== clientId) {
-    throw new AppError(403, "Not job owner");
-  }
-  if (job.status !== "open") {
-    throw new AppError(400, "Only open jobs can be deleted");
-  }
-  await prisma.job.delete({ where: { id: BigInt(jobId) } });
+  await prisma.$transaction(
+    async (tx) => {
+      // Same fix as cancelJob, same reason: getJob() before the transaction
+      // reads a snapshot that a concurrent acceptProposal can invalidate
+      // before this transaction's writes run. Here the stakes are worse —
+      // Contract.job is onDelete: Cascade, so a stale "open" read racing
+      // against acceptProposal wouldn't just leave a contract dangling
+      // (cancelJob's original bug), it would silently destroy a
+      // just-created contract and its proposals outright.
+      const job = await lockJobForUpdate(tx, jobId);
+      if (job.client_id !== clientId) {
+        throw new AppError(403, "Not job owner");
+      }
+      if (job.status !== "open") {
+        throw new AppError(400, "Only open jobs can be deleted");
+      }
+
+      await tx.job.delete({ where: { id: BigInt(jobId) } });
+    },
+    // Same 15000ms as the other four job-locking paths — see updateJob's
+    // comment.
+    { timeout: 15000 },
+  );
 }

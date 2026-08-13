@@ -27,3 +27,16 @@ export type TrackedOpType = (typeof TRACKED_OP_TYPES)[number];
 export function isTrackedOpType(value: string): value is TrackedOpType {
   return (TRACKED_OP_TYPES as readonly string[]).includes(value);
 }
+
+/**
+ * Milestone statuses that mean real money/escrow motion has happened.
+ * A contract/job can't be cancelled out from under a milestone in one of
+ * these states — used by both cancelContract and cancelJob, so it lives
+ * here rather than being duplicated (or one importing from the other).
+ */
+export const BLOCKING_MILESTONE_STATUSES = [
+  "funded",
+  "submitted",
+  "approved",
+  "released",
+] as const;

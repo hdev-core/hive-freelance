@@ -2,7 +2,7 @@
 
 export type UserRole = "client" | "freelancer" | "both";
 export type AuthType = "keychain" | "google" | "claimed";
-export type JobStatus = "open" | "in_progress" | "completed";
+export type JobStatus = "open" | "in_progress" | "completed" | "cancelled";
 export type ProposalStatus = "pending" | "accepted" | "rejected";
 export type ContractStatus = "active" | "completed" | "cancelled";
 export type MilestoneStatus =
