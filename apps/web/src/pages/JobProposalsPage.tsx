@@ -54,7 +54,11 @@ export function JobProposalsPage() {
 
   async function reload() {
     if (!id) return;
-    const [jobData, proposalsData] = await Promise.all([getJob(id), listProposalsForJob(id)]);
+    // This page's tab counts/sort operate over the full set client-side, so
+    // it asks for the max page size (50) rather than the default (20) —
+    // same "just take a big limit, no page-flip UI" pattern JobsListPage
+    // uses for GET /jobs.
+    const [jobData, proposalsData] = await Promise.all([getJob(id), listProposalsForJob(id, { limit: 50 })]);
     setJob(jobData);
     setProposals(proposalsData.items);
   }
