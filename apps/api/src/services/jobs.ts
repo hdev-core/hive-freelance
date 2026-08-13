@@ -1,5 +1,4 @@
 import { prisma, toJobRow, type JobRow } from "@hive-freelance/db";
-import { BLOCKING_MILESTONE_STATUSES } from "@hive-freelance/shared";
 import { AppError } from "../lib/errors.js";
 import { lockJobForUpdate } from "../lib/locks.js";
 
@@ -185,17 +184,10 @@ export async function cancelJob(
   const updated = await prisma.$transaction(
     async (tx) => {
       // Lock the job row FIRST, as the very first statement in this
-      // transaction — same order acceptProposal uses. Two things this
-      // fixes at once:
-      //  - deadlock ordering: acceptProposal locks job, then touches
-      //    contracts; this now does the same, instead of the old
-      //    contract-then-job order that could deadlock against it.
-      //  - stale-status TOCTOU: reading status via a separate getJob()
-      //    call *before* this transaction started meant a concurrent
-      //    acceptProposal could flip open -> in_progress (and create a
-      //    contract) in between that read and this transaction's writes,
-      //    leaving a cancelled job with an active contract still attached.
-      //    Reading status fresh, under the lock, closes that gap.
+      // transaction — same order acceptProposal uses. Prevents deadlock
+      // ordering against acceptProposal, and closes the stale-status
+      // TOCTOU a separate getJob() call before the transaction would
+      // otherwise allow.
       const job = await lockJobForUpdate(tx, jobId);
       if (job.client_id !== clientId) {
         throw new AppError(403, "Not job owner");
@@ -207,43 +199,26 @@ export async function cancelJob(
         );
       }
 
-      // Cancelling an open job has no attached contract to worry about —
-      // a contract only ever gets created on proposal acceptance, which
-      // is exactly what flips the job to in_progress. So this branch
-      // only matters for the in_progress case.
-      if (job.status === "in_progress") {
-        const contract = await tx.contract.findFirst({
-          where: { jobId: BigInt(jobId), status: "active" },
-        });
-        if (contract) {
-          // Same rule as cancelContract: don't allow cancelling out from
-          // under milestones that already have real money/escrow motion.
-          const blockingMilestone = await tx.milestone.findFirst({
-            where: {
-              contractId: contract.id,
-              status: { in: [...BLOCKING_MILESTONE_STATUSES] },
-            },
-          });
-          if (blockingMilestone) {
-            throw new AppError(
-              400,
-              "Cannot cancel — contract has funded milestones. Use cooperative refund or dispute instead.",
-            );
-          }
-          // updateMany with a status guard, not update-by-id: this job's
-          // lock has no mutual exclusion with completeContract (which
-          // locks only the contract row, not the job), so the contract
-          // found above could have transitioned to "completed" between
-          // that findFirst and here. Guarding the write means a
-          // completed contract is left alone instead of silently
-          // overwritten back to "cancelled" — this only ever fires when
-          // the contract this job's lock actually protects is still the
-          // one being cancelled.
-          await tx.contract.updateMany({
-            where: { id: contract.id, status: "active" },
-            data: { status: "cancelled", endDate: new Date() },
-          });
-        }
+      // Product decision (Mohammad, 2026-08-12): cancelling a job must
+      // NOT cascade-cancel an active contract. A contract can have
+      // funded milestones — real escrow on Hive holding real HBD — and
+      // an implicit cascade lets one click strand money a freelancer has
+      // already worked against, with nothing in the flow saying so.
+      // Cancelling the contract is now a separate, deliberate act
+      // (cancelContract) the client has to take first; this function
+      // just refuses outright while one exists, regardless of whether
+      // any milestone is actually funded — an active contract with no
+      // funded milestone still represents a real agreement with a
+      // freelancer, not just an escrow-holding concern.
+      const activeContract = await tx.contract.findFirst({
+        where: { jobId: BigInt(jobId), status: "active" },
+        select: { id: true },
+      });
+      if (activeContract) {
+        throw new AppError(
+          409,
+          "This job has an active contract — cancel the contract before cancelling the job.",
+        );
       }
 
       return tx.job.update({
@@ -251,10 +226,7 @@ export async function cancelJob(
         data: { status: "cancelled" },
       });
     },
-    // Up to 5 round-trips here — same order of magnitude as
-    // acceptProposal, which measured ~5.5s under real pooled-connection
-    // latency and tripped the default 5000ms. Same fix, same reasoning
-    // (see the comment on acceptProposal's $transaction call).
+    // Same 15000ms as the other four job-locking paths.
     { timeout: 15000 },
   );
 

@@ -174,22 +174,25 @@ export async function submitProposal(
 }
 
 /**
- * KNOWN GAP (tracked separately, not fixed here — see Trello): this reads
- * `status` unlocked, before any transaction. If an accept runs to
- * completion between this read and the delete below — read here sees
- * "pending", accept commits (proposal -> accepted, contract created),
- * then this delete proceeds once acceptProposal's row lock releases —
- * the now-accepted proposal gets deleted anyway. Contract.proposal is
- * onDelete: Cascade, so the contract, its milestones, payments, and
- * reviews all cascade away with it, even though the accept already
- * returned 200 and the client may have broadcast to Hive. Locking the
- * proposal row inside acceptProposal (see that function) closes the
- * *interleaving* version of this race — a delete that's already
- * in-flight when accept starts now correctly blocks and 404s — but not
- * this one, where the delete starts fresh after accept has already
- * committed. Closing it fully means routing this through the same
- * job-lock-first transaction acceptProposal uses, not a bigger fix, just
- * one not made in this pass.
+ * KNOWN GAP (tracked separately — see Trello, a prompt follow-up, not a
+ * someday one): this reads `status` unlocked, before any transaction.
+ * Locking the proposal row inside acceptProposal (see that function)
+ * closes the *interleaving* version of this race that used to cause a
+ * P2025 leak — a delete that starts while accept's transaction is still
+ * running now blocks on the row lock instead of racing accept's own
+ * writes. It does NOT close the *sequential* version: once accept
+ * commits, the previously-blocked delete proceeds and succeeds against
+ * the now-accepted proposal anyway — Prisma's delete has no status
+ * guard, so it doesn't matter that the row is no longer "pending".
+ * Contract.proposal is onDelete: Cascade, so the contract, its
+ * milestones, payments, and reviews all cascade away with it, even
+ * though the client may have already broadcast the accept to Hive, with
+ * nothing detecting the divergence. Measured at 29/40 randomized races —
+ * this is the common outcome, not a corner case. Closing it fully means
+ * routing this through the same job-lock-first transaction
+ * acceptProposal uses, so the write only proceeds if status is still
+ * what was expected when re-checked under the lock — not done in this
+ * pass.
  */
 export async function withdrawProposal(
   proposalId: string,
