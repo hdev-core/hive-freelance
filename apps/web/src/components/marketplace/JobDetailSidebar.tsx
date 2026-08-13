@@ -107,14 +107,18 @@ export function JobDetailSidebar({
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   async function performCancel() {
-    setConfirmOpen(false);
+    // Keep the dialog open while the request is in flight — closing it
+    // first (the old behavior) unmounted ConfirmDialog before `cancelling`
+    // ever became true, so its `busy` prop never actually rendered.
     setCancelling(true);
     setCancelError(null);
     try {
       const updated = await cancelJob(job.id);
       onCancelled?.({ ...job, ...updated });
+      setConfirmOpen(false);
     } catch (err) {
       setCancelError(err instanceof Error ? err.message : "Failed to cancel job");
+      setConfirmOpen(false);
     } finally {
       setCancelling(false);
     }
