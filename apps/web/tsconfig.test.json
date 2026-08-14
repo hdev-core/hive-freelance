@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // tsconfig.json pins "types" to just vite/client, on purpose, so Node
+    // globals can't accidentally leak into browser code. Test files run
+    // under node:test though (node --import tsx --test), so this config
+    // adds "node" back just for them.
+    "types": ["vite/client", "node"]
+  },
+  "exclude": []
+}
