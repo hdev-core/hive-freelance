@@ -23,5 +23,10 @@ test("freelancerDisplayName never falls back to a raw Freelancer #<id> string", 
     freelancer_display_name: null,
     freelancer_username: "jane-hive",
   });
+  // Asserting the real expected value, not just the absence of the old
+  // pattern — doesNotMatch(name, /^Freelancer #/) alone passes for nearly
+  // any string, including a wrong one, so it wouldn't actually catch a
+  // broken fallback (e.g. one that returns the username uppercased).
+  assert.equal(name, "jane-hive");
   assert.doesNotMatch(name, /^Freelancer #/);
 });
