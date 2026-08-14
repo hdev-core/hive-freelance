@@ -5,6 +5,7 @@ import { lockJobForUpdate } from "../lib/locks.js";
 export async function listJobs(opts: {
   category?: string;
   skill?: string;
+  keyword?: string;
   status?: string;
   client_id?: string;
   budget_min?: number;
@@ -34,6 +35,13 @@ export async function listJobs(opts: {
     if (opts.budget_min != null) budget.gte = opts.budget_min;
     if (opts.budget_max != null) budget.lte = opts.budget_max;
     where.budget = budget;
+  }
+  if (opts.keyword) {
+    where.OR = [
+      { title: { contains: opts.keyword, mode: "insensitive" } },
+      { description: { contains: opts.keyword, mode: "insensitive" } },
+      { skillsRequired: { has: opts.keyword } },
+    ];
   }
 
   const jobs = await prisma.job.findMany({
