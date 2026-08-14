@@ -74,8 +74,19 @@ export function ProposalsList({ jobId, proposalCount }: { jobId: string; proposa
         </div>
       </div>
 
-      {proposalCount === 0 || !proposal ? (
+      {proposalCount === 0 ? (
         <p className="text-sm text-text-secondary">No proposals yet.</p>
+      ) : !proposal ? (
+        // proposalCount (job.proposalCount, a separate aggregate from
+        // GET /jobs/:id) says there's at least one, but this component's
+        // own limit: 1 fetch came back empty — e.g. a proposal withdrawn
+        // between the two reads. Distinct from the zero-proposals case
+        // above: don't tell the client "No proposals yet" when the count
+        // right next to it says otherwise.
+        <p className="text-sm text-text-secondary">
+          This job has {proposalCount} proposal{proposalCount === 1 ? "" : "s"}, but the latest one couldn't be
+          loaded right now — try refreshing.
+        </p>
       ) : (
         <div className="flex flex-col gap-3">
           {/* Most recent only — a preview, not the full comparison list.
