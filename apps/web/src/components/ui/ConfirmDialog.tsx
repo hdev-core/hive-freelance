@@ -33,24 +33,76 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
+  // Focus management only — deliberately not re-run on `busy` so this
+  // doesn't re-capture previouslyFocused or re-steal focus onto Cancel
+  // every time a request starts/finishes.
   useEffect(() => {
     if (!open) return;
     previouslyFocused.current = document.activeElement as HTMLElement | null;
     cancelButtonRef.current?.focus();
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !busy) onCancel();
-    }
-    window.addEventListener("keydown", onKeyDown);
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
       previouslyFocused.current?.focus();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // A disabled button can't hold DOM focus — the instant `busy` flips true
+  // and both buttons get `disabled`, the browser blurs whichever one had
+  // focus back to <body>. Left alone, the next Tab would resume native tab
+  // order from <body> and walk straight out of the modal into the page
+  // behind it (the trap below has nothing to cycle between at that point —
+  // zero enabled elements). Re-anchor focus on the dialog container itself
+  // (tabIndex={-1}: programmatically focusable, not in normal tab order)
+  // so focus has somewhere to legitimately live for the trap to pin.
+  useEffect(() => {
+    if (open && busy) {
+      dialogRef.current?.focus();
+    }
+  }, [open, busy]);
+
+  // Separate effect so the listener re-subscribes with the current `busy`
+  // value instead of closing over whatever it was when the dialog opened —
+  // otherwise a keypress after busy flips true/false still uses the stale
+  // value from mount.
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (!busy) onCancel();
+        return;
+      }
+      if (e.key !== "Tab") return;
+
+      // While busy there are zero enabled elements to cycle between —
+      // pin Tab outright instead of trying to find a first/last among
+      // nothing, which is what silently let focus escape before.
+      if (busy) {
+        e.preventDefault();
+        return;
+      }
+
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, busy, onCancel]);
 
   if (!open) return null;
 
@@ -62,11 +114,13 @@ export function ConfirmDialog({
         aria-hidden="true"
       />
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby={description ? "confirm-dialog-description" : undefined}
-        className="animate-modal-in relative flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-border bg-surface p-6 shadow-elevate"
+        className="animate-modal-in relative flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-border bg-surface p-6 shadow-elevate outline-none"
       >
         <div>
           <h2 id="confirm-dialog-title" className="text-base font-semibold text-text-primary">

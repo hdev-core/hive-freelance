@@ -96,8 +96,18 @@ export type MyProposalRow = ProposalRow & {
   contract_milestones: MilestoneRow[] | null;
 };
 
-export function listProposalsForJob(jobId: string): Promise<{ items: ProposalWithFreelancer[] }> {
-  return apiFetch<{ items: ProposalWithFreelancer[] }>(`/api/v1/jobs/${encodeURIComponent(jobId)}/proposals`);
+/** Same page/limit query contract as listJobs (jobDetailService.ts). */
+export function listProposalsForJob(
+  jobId: string,
+  params: { page?: number; limit?: number } = {},
+): Promise<{ items: ProposalWithFreelancer[]; page: number; limit: number }> {
+  const query = new URLSearchParams();
+  if (params.page != null) query.set("page", String(params.page));
+  if (params.limit != null) query.set("limit", String(params.limit));
+  const qs = query.toString();
+  return apiFetch<{ items: ProposalWithFreelancer[]; page: number; limit: number }>(
+    `/api/v1/jobs/${encodeURIComponent(jobId)}/proposals${qs ? `?${qs}` : ""}`,
+  );
 }
 
 /** The signed-in freelancer's own proposals, every job, every status. */

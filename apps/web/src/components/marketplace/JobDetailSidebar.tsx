@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Clock, XCircle } from "lucide-react";
 import { Button } from "../ui/Button";
@@ -105,18 +105,32 @@ export function JobDetailSidebar({
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Synchronous guard, checked and set before any state update or await —
+  // `disabled={cancelling}` on the button isn't enough on its own, since
+  // React doesn't commit that attribute until the next render. Two clicks
+  // dispatched back-to-back (or two Enter/Space activations) both run
+  // before that commit, so both would otherwise pass straight through and
+  // fire two real requests. A ref updates immediately, in the same tick.
+  const cancellingRef = useRef(false);
 
   async function performCancel() {
-    setConfirmOpen(false);
+    if (cancellingRef.current) return;
+    cancellingRef.current = true;
+    // Keep the dialog open while the request is in flight — closing it
+    // first (the old behavior) unmounted ConfirmDialog before `cancelling`
+    // ever became true, so its `busy` prop never actually rendered.
     setCancelling(true);
     setCancelError(null);
     try {
       const updated = await cancelJob(job.id);
       onCancelled?.({ ...job, ...updated });
+      setConfirmOpen(false);
     } catch (err) {
       setCancelError(err instanceof Error ? err.message : "Failed to cancel job");
+      setConfirmOpen(false);
     } finally {
       setCancelling(false);
+      cancellingRef.current = false;
     }
   }
 
