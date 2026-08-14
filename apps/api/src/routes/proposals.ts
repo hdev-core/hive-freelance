@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { asyncHandler } from "../lib/errors.js";
+import { asyncHandler, AppError } from "../lib/errors.js";
 import { param } from "../lib/params.js";
 import {
   requireAuth,
@@ -34,15 +34,39 @@ proposalsRouter.get(
   }),
 );
 
+/**
+ * Rejects page/limit input Number.isSafeInteger can't vouch for, with a
+ * clean 400 — before it reaches listProposalsForJob's floor/ceiling clamp
+ * (Math.max/Math.min), which only defends against a value being out of
+ * *range*, not against it being unusable as an integer at all:
+ *   - Number("abc") is NaN, which Math.max(1, NaN) leaves as NaN, which
+ *     Prisma rejects as an invalid `skip` — a raw 500.
+ *   - Number("99999999999999999999") is a finite-but-unsafe float; page
+ *     has no ceiling clamp (only limit does), so an astronomical skip
+ *     reaches Prisma the same way — also a raw 500.
+ * A value that's merely out of a sane *range* (0, -5, 999) is still a
+ * safe integer, so it passes through here unchanged and hits the existing
+ * clamp exactly as before — this only catches what that clamp can't.
+ */
+function paginationQueryParam(value: unknown, name: string): number | undefined {
+  if (value == null) return undefined;
+  const n = Number(value);
+  if (!Number.isSafeInteger(n)) {
+    throw new AppError(400, `${name} must be a whole number`);
+  }
+  return n;
+}
+
 jobProposalsRouter.get(
   "/",
   requireAuth,
   requireClient,
   asyncHandler(async (req, res) => {
-    // Same page/limit query contract as GET /jobs (routes/jobs.ts).
+    // Same page/limit query contract as GET /jobs (routes/jobs.ts), plus
+    // validation jobs.ts's equivalent doesn't have yet (tracked separately).
     const result = await listProposalsForJob(param(req, "id"), req.user!.id, {
-      page: req.query.page ? Number(req.query.page) : undefined,
-      limit: req.query.limit ? Number(req.query.limit) : undefined,
+      page: paginationQueryParam(req.query.page, "page"),
+      limit: paginationQueryParam(req.query.limit, "limit"),
     });
     res.json(result);
   }),
@@ -78,6 +102,17 @@ const portfolioLinkSchema = z.object({
  * nearest cent instead, then normalizes to that exact cent value. Genuine
  * sub-cent precision (e.g. 100.005) is still rejected: its distance from
  * the nearest cent is far larger than the epsilon.
+ *
+ * The second refine closes a gap the first one leaves open: .positive()
+ * only checks the *raw* input, before rounding. A value like 1e-9 is
+ * positive and well within the epsilon of zero, so it passes both — then
+ * .transform rounds it to exactly 0. Without this check that 0 reaches the
+ * database, where it's the DB's CHECK constraint (not this schema) that
+ * ends up being the first thing to reject it — a raw 500, not a clean 400.
+ * This must run on the pre-transform value here (a second .refine, not
+ * folded into .transform) so the round-to-zero case surfaces as its own
+ * named validation error instead of silently disappearing into whichever
+ * message the epsilon refine happened to produce.
  */
 const centsAmount = z
   .number()
@@ -85,6 +120,9 @@ const centsAmount = z
   .max(99_999_999.99)
   .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, {
     message: "Amount must not have more than 2 decimal places",
+  })
+  .refine((v) => Math.round(v * 100) / 100 > 0, {
+    message: "Amount must round to at least 0.01",
   })
   .transform((v) => Math.round(v * 100) / 100);
 
@@ -94,15 +132,16 @@ const proposalMilestoneSchema = z.object({
   duration: z.string().min(1).max(50),
 });
 
-// A character-count cap (the original approach here) doesn't protect
-// against multi-byte UTF-8: 60,000 CJK characters is ~180KB, three times
-// over express.json()'s 100KB *byte* default on the whole request body
-// (index.ts) — well past that limit despite being far under a 100,000-char
-// cap. Bounding on Buffer.byteLength instead, at 50,000 bytes (half the
-// body-parser ceiling, leaving headroom for the rest of the payload —
-// milestones, portfolio_links, etc.), means an oversized cover_letter gets
-// a specific, actionable 400 from Zod before it has any chance of tripping
-// body-parser's blunt whole-request 413.
+// cover_letter was unbounded on develop (z.string().min(1), no max at
+// all). A character-count cap wouldn't be enough on its own, though: it
+// doesn't protect against multi-byte UTF-8 — 60,000 CJK characters is
+// ~180KB, three times over express.json()'s 100KB *byte* default on the
+// whole request body (index.ts), despite being a number of *characters*
+// a cap could easily wave through. Bounding on Buffer.byteLength instead,
+// at 50,000 bytes (half the body-parser ceiling, leaving headroom for the
+// rest of the payload — milestones, portfolio_links, etc.), means an
+// oversized cover_letter gets a specific, actionable 400 from Zod before
+// it has any chance of tripping body-parser's blunt whole-request 413.
 const MAX_COVER_LETTER_BYTES = 50_000;
 const coverLetterSchema = z
   .string()
