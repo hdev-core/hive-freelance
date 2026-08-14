@@ -75,7 +75,7 @@ test("errorHandler maps a PrismaClientUnknownRequestError deadlock to 409, not 5
 
   errorHandler(
     err,
-    { method: "POST", originalUrl: "/api/v1/proposals/abc/accept", params: { id: "abc" } } as Request,
+    { method: "POST", originalUrl: "/api/v1/proposals/abc/accept", params: { id: "abc" } } as unknown as Request,
     res as unknown as Response,
     () => {},
   );
@@ -92,8 +92,9 @@ test("errorHandler maps body-parser's PayloadTooLargeError to a clean 413, not 5
   // body-size limit is exceeded (e.g. a multi-byte cover_letter well under
   // a character cap but over the 100KB byte one) — status/statusCode 413,
   // type "entity.too.large". Before this branch existed, this fell through
-  // to the generic 500 handler and leaked "PayloadTooLargeError: request
-  // entity too large" to the client.
+  // to the generic 500 handler — a wrong status (500 instead of 413) with
+  // the generic { error: "Internal server error" } body, not a leak of the
+  // real error message (the catch-all branch never echoes err.message).
   const err = createHttpError(413, "request entity too large", {
     length: 200_000,
     limit: 102_400,
@@ -104,7 +105,7 @@ test("errorHandler maps body-parser's PayloadTooLargeError to a clean 413, not 5
 
   errorHandler(
     err,
-    { method: "POST", originalUrl: "/api/v1/jobs/1/proposals", params: {} } as Request,
+    { method: "POST", originalUrl: "/api/v1/jobs/1/proposals", params: {} } as unknown as Request,
     res as unknown as Response,
     () => {},
   );
