@@ -31,6 +31,25 @@ export function verifyToken(token: string): JwtPayload {
   };
 }
 
+// Validated once at module load (process startup), not per-request — a
+// case/typo mistake here (COOKIE_SECURE=TRUE, "1", "yes", etc.) would
+// otherwise silently fall back to insecure cookies with no error
+// anywhere, exactly the kind of misconfiguration that stays invisible
+// until someone happens to notice cookies aren't Secure on a server
+// that's supposed to have them. Failing at boot means it's caught
+// immediately, not discovered later.
+const rawCookieSecure = process.env.COOKIE_SECURE;
+if (
+  rawCookieSecure !== undefined &&
+  rawCookieSecure !== "true" &&
+  rawCookieSecure !== "false"
+) {
+  throw new Error(
+    `COOKIE_SECURE must be exactly "true" or "false" (case-sensitive) if set, got: "${rawCookieSecure}"`,
+  );
+}
+const secureCookies = rawCookieSecure === "true";
+
 export function cookieOptions() {
   // Deliberately its own env var, not tied to NODE_ENV === "production".
   // NODE_ENV=production would also silently disable
@@ -38,7 +57,6 @@ export function cookieOptions() {
   // dev/staging deployments still need working — see the deploy runbook
   // for the full reasoning. COOKIE_SECURE lets a hosted-but-still-dev
   // environment get correct cookie security without that side effect.
-  const secureCookies = process.env.COOKIE_SECURE === "true";
   return {
     httpOnly: true,
     secure: secureCookies,

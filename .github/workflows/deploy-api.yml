@@ -38,6 +38,7 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           SERVER_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           DEPLOY_SHA: ${{ github.sha }}
         run: |
           mkdir -p ~/.ssh
@@ -50,9 +51,17 @@ jobs:
           # authenticates nothing. StrictHostKeyChecking=yes below means
           # this fails closed if the server's key ever actually changes,
           # rather than silently trusting whatever's presented.
-          cat >> ~/.ssh/known_hosts << 'EOF'
-          62.238.101.245 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMGDu7XvLE4yakfVsy+bbaQZQ/fGqwu4hSwpfDCf1UHc
-          EOF
+          #
+          # The whole known_hosts line (host + key) lives in a secret,
+          # not hardcoded here — the public key itself isn't sensitive,
+          # but the server address is, and this repo is public. Storing
+          # the complete line as one secret (rather than reconstructing
+          # it from DEPLOY_HOST + a literal key) also closes a
+          # correctness risk: if DEPLOY_HOST were ever a hostname rather
+          # than the exact string this entry keys on, a reconstructed
+          # entry wouldn't match and every run would fail closed with no
+          # obvious cause.
+          echo "$DEPLOY_KNOWN_HOSTS" >> ~/.ssh/known_hosts
 
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             deploy@"$SERVER_HOST" "DEPLOY_SHA='$DEPLOY_SHA' bash -s" << 'REMOTE_SCRIPT'
@@ -96,12 +105,19 @@ jobs:
           # is IPv6-only and unreachable from some home networks, but
           # this runs from the server's own datacenter connection, where
           # it works.
+          #
+          # PGPASSWORD, not embedded in the URL — passing a URI with the
+          # password inline puts it in argv, readable by any local user
+          # via `ps aux` for the duration of the dump. PG_DUMP_URL holds
+          # no password; PG_DUMP_PASSWORD supplies it via libpq's
+          # PGPASSWORD environment variable instead, which pg_dump reads
+          # without ever putting it on the command line.
           mkdir -p ~/db-backups
           BACKUP_FILE=~/db-backups/pre-migrate-$(date +%Y%m%d-%H%M%S).sql
           set -a
           source packages/db/.env
           set +a
-          pg_dump "$PG_DUMP_URL" > "$BACKUP_FILE"
+          PGPASSWORD="$PG_DUMP_PASSWORD" pg_dump "$PG_DUMP_URL" > "$BACKUP_FILE"
           ls -t ~/db-backups/*.sql | tail -n +6 | xargs -r rm --
 
           npm run migrate -w @hive-freelance/db

@@ -113,7 +113,7 @@ ssh hive-api-deploy "cd ~/hive-freelance && \
   npm run build -w @hive-freelance/provisioner && \
   npm run build -w @hive-freelance/api && \
   mkdir -p ~/db-backups && \
-  (set -a; source packages/db/.env; set +a; pg_dump \"\$PG_DUMP_URL\" > ~/db-backups/manual-\$(date +%Y%m%d-%H%M%S).sql) && \
+  (set -a; source packages/db/.env; set +a; PGPASSWORD=\"\$PG_DUMP_PASSWORD\" pg_dump \"\$PG_DUMP_URL\" > ~/db-backups/manual-\$(date +%Y%m%d-%H%M%S).sql) && \
   npm run migrate -w @hive-freelance/db && \
   pm2 restart hive-freelance-api"
 ```
@@ -162,7 +162,7 @@ the right file first):
 ```
 ssh hive-api-deploy "cd ~/hive-freelance/packages/db && \
   set -a && source .env && set +a && \
-  psql \"\$PG_DUMP_URL\" < ~/db-backups/<filename>.sql"
+  PGPASSWORD=\"\$PG_DUMP_PASSWORD\" psql \"\$PG_DUMP_URL\" < ~/db-backups/<filename>.sql"
 ```
 
 ### Rolling back the application code
@@ -256,11 +256,18 @@ redundant — different tools read different ones:
   same pooler fine, this is specific to libpq-based tools).
   `PG_DUMP_URL` points at Supabase's true direct, non-pooled host
   instead, and is what every backup/restore command in this doc
-  actually uses.
+  actually uses. It deliberately carries no password — that lives in
+  `PG_DUMP_PASSWORD`, supplied via `PGPASSWORD` at call time instead of
+  embedded in the URL, since a password in a command's arguments is
+  visible to any local user via `ps aux` for as long as the command runs.
 
-Both are gitignored and were never committed — see `.env.example` at
-the repo root for the full list of variables and what each one means;
-placeholders only there, no real values. As of the last check, no real
-Hive active keys are present in either file (`LOCAL_AGENT_ACTIVE_KEY`
-and `LOCAL_CREATOR_ACTIVE_KEY` are both empty), and every live-broadcast
-flag (`PROVISIONER_LIVE`, `AGENT_LIVE`, `CLAIM_LIVE`) is `false`.
+Both are gitignored and were never committed. `apps/api`'s variables are
+documented in `.env.example` at the repo root; `packages/db`'s
+(`DATABASE_URL`/`DIRECT_URL`/`PG_DUMP_URL`/`PG_DUMP_PASSWORD`) are
+documented separately in `packages/db/.env.example` — they were never
+actually in the root file despite this doc previously claiming
+otherwise. Placeholders only in both, no real values. As of the last
+check, no real Hive active keys are present in either server `.env`
+(`LOCAL_AGENT_ACTIVE_KEY` and `LOCAL_CREATOR_ACTIVE_KEY` are both
+empty), and every live-broadcast flag (`PROVISIONER_LIVE`, `AGENT_LIVE`,
+`CLAIM_LIVE`) is `false`.

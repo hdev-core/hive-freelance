@@ -247,10 +247,26 @@ it's ever compromised via the CI secrets store.
 
 Deploy key placement (an SSH key with repo-level read access, added via
 repo Settings → Deploy keys) required repo admin access, which wasn't
-available — Dr. Mohammad clarified this wasn't necessary and a
-fine-grained/classic GitHub Personal Access Token (scoped to this repo,
-`repo` scope, 90-day expiration) was used instead for the initial
-clone, since normal collaborator access was already sufficient.
+available — Dr. Mohammad clarified this wasn't necessary and a classic
+GitHub Personal Access Token (`repo` scope, 90-day expiration) was used
+instead for the initial clone, since normal collaborator access was
+already sufficient.
+
+**Follow-up, resolved 2026-08-15:** a security review correctly flagged
+that this token was embedded directly in the clone URL, which means it
+was also embedded in `origin`'s URL in the server's `.git/config` —
+readable in plaintext by anything running as the `deploy` user,
+including a compromised Node process, for as long as it stayed there.
+Worse than it first looked: this was a *classic* token, not scoped to
+just this one repo but to every repo the account can write to.
+
+The actual fix turned out to be simpler than swapping to a deploy
+key: `hdev-core/hive-freelance` is a **public** repository, so `git
+fetch`/`pull` over HTTPS needs no credential of any kind. The token was
+never actually necessary past the very first clone, if even then. Fixed
+via `git remote set-url origin https://github.com/hdev-core/hive-freelance.git`
+(no embedded credential), verified `git fetch` still works with nothing
+attached, and the original token was revoked on GitHub's side.
 
 ---
 
