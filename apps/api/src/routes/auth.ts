@@ -16,6 +16,7 @@ import {
   verifyPostingSignature,
 } from "../lib/hiveAuth.js";
 import {
+  clearCookieOptions,
   cookieOptions,
   JWT_COOKIE,
   signToken,
@@ -195,12 +196,12 @@ authRouter.post(
 authRouter.post(
   "/logout",
   asyncHandler(async (_req, res) => {
-    // Must match the attributes the cookie was actually set with
-    // (cookieOptions(), same as login above) — clearCookie with just
-    // {path} emits no Secure/SameSite/HttpOnly, which still deletes by
-    // name+domain+path but leans on a default-Lax Set-Cookie surviving
-    // a cross-site fetch rather than actually matching.
-    res.clearCookie(JWT_COOKIE, cookieOptions());
+    // Must match the security attributes the cookie was actually set
+    // with (secure/sameSite/httpOnly/path), but NOT maxAge — see
+    // clearCookieOptions()'s own comment for why passing cookieOptions()
+    // directly here would silently reissue a live cookie instead of
+    // deleting it, despite looking correct.
+    res.clearCookie(JWT_COOKIE, clearCookieOptions());
     res.json({ ok: true });
   }),
 );
