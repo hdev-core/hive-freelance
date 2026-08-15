@@ -6,6 +6,8 @@ Stack decisions live in [`Docs/[03] System_Architecture_Data_Model/[01] Tech_Sta
 
 **Live frontend:** https://hive-freelance.vercel.app/ (API not deployed yet — see [`DEPLOYMENT.md`](DEPLOYMENT.md) §4)
 
+See [Docs/[02] Additional Docs/[09] Deploy_Runbook.md](Docs/[02]%20Additional%20Docs/[09]%20Deploy_Runbook.md) for server operations.
+
 ## Stack map
 
 | Layer | Package / app |

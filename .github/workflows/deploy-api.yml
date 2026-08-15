@@ -6,20 +6,22 @@ on:
       - develop
     paths:
       # Only redeploy when something that actually affects the running
-      # server changes — same reasoning as build-gate.yml's per-workspace
-      # jobs, applied to deploy instead of build. Avoids a pointless
-      # restart (and a few seconds of downtime) on, say, a docs-only or
-      # apps/web-only commit.
+      # server changes. root package.json is included alongside the
+      # lockfile now, since a workspace/script change there alone
+      # wouldn't otherwise trigger a deploy.
       - "apps/api/**"
       - "packages/db/**"
       - "packages/shared/**"
       - "packages/hive/**"
       - "apps/provisioner/**"
+      - "package.json"
       - "package-lock.json"
       - ".github/workflows/deploy-api.yml"
 
-permissions:
-  contents: read
+# Job never checks out the repo or calls any API of its own — it only
+# opens an SSH connection and hands the remote shell a fixed script, so
+# it needs no permissions at all.
+permissions: {}
 
 concurrency:
   group: deploy-api
@@ -29,44 +31,87 @@ jobs:
   deploy:
     name: Deploy to server
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
 
     steps:
       - name: Deploy over SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SERVER_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SHA: ${{ github.sha }}
         run: |
-          SERVER_HOST="62.238.101.245"
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes deploy@"$SERVER_HOST" '
-            set -e
-            cd ~/hive-freelance
+          # Host key pinned once, captured out-of-band via ssh-keyscan on
+          # 2026-08-14 — not re-fetched on every run. ssh-keyscan on every
+          # run is trust-on-first-use where "first" is every time, which
+          # authenticates nothing. StrictHostKeyChecking=yes below means
+          # this fails closed if the server's key ever actually changes,
+          # rather than silently trusting whatever's presented.
+          cat >> ~/.ssh/known_hosts << 'EOF'
+          62.238.101.245 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMGDu7XvLE4yakfVsy+bbaQZQ/fGqwu4hSwpfDCf1UHc
+          EOF
 
-            # --hard is deliberate: the server checkout should never have
-            # local changes of its own to preserve — this is a pure
-            # deploy target, not somewhere anyone edits directly.
-            git fetch origin develop
-            git checkout develop
-            git reset --hard origin/develop
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            deploy@"$SERVER_HOST" "DEPLOY_SHA='$DEPLOY_SHA' bash -s" << 'REMOTE_SCRIPT'
+          set -e
+          cd ~/hive-freelance
 
-            npm ci
+          # Deploy the exact commit that triggered this run, not "whatever
+          # develop's tip happens to be by the time this SSH session
+          # runs" — under concurrency (two merges close together), the
+          # second run's "git reset --hard origin/develop" would silently
+          # deploy the later commit even for the run the Actions UI shows
+          # green against the earlier one.
+          git fetch origin develop
+          git checkout --detach "$DEPLOY_SHA"
 
-            npm run build -w @hive-freelance/shared
-            npm run build -w @hive-freelance/db
-            npm run build -w @hive-freelance/hive
-            npm run build -w @hive-freelance/provisioner
-            npm run build -w @hive-freelance/api
+          npm ci
 
-            cd packages/db
-            npx prisma migrate deploy
-            cd ../..
+          npm run build -w @hive-freelance/shared
+          npm run build -w @hive-freelance/db
+          npm run build -w @hive-freelance/hive
+          npm run build -w @hive-freelance/provisioner
+          npm run build -w @hive-freelance/api
 
-            pm2 restart hive-freelance-api
+          # Backup before every migration attempt, not just on failure —
+          # a migrate deploy that gets killed mid-way (e.g. this job
+          # hitting its timeout) can leave Prisma's migration history in
+          # a failed state (P3009), which then blocks every future
+          # migrate deploy until someone manually resolves it. A fresh
+          # dump right before the attempt means there's always a known-
+          # good point to restore from regardless of how it fails.
+          # Kept as the 5 most recent; older ones are pruned so this
+          # doesn't grow unbounded on a small box.
+          mkdir -p ~/db-backups
+          BACKUP_FILE=~/db-backups/pre-migrate-$(date +%Y%m%d-%H%M%S).sql
+          set -a
+          source packages/db/.env
+          set +a
+          pg_dump "$DIRECT_URL" > "$BACKUP_FILE"
+          ls -t ~/db-backups/*.sql | tail -n +6 | xargs -r rm --
 
-            sleep 2
-            curl -sf http://localhost:4000/health || (echo "Health check failed after deploy" && exit 1)
-          '
+          npm run migrate -w @hive-freelance/db
+
+          pm2 restart hive-freelance-api
+
+          healthy=false
+          for i in $(seq 1 10); do
+            if curl -s http://localhost:4000/health | grep -q "\"ok\":true"; then
+              healthy=true
+              break
+            fi
+            sleep 3
+          done
+          if [ "$healthy" != true ]; then
+            echo "Health check failed after deploy (10 attempts, 3s apart)"
+            echo "Most recent backup, if a manual restore is needed: $BACKUP_FILE"
+            exit 1
+          fi
+          REMOTE_SCRIPT
+
+      - name: Clean up deploy key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

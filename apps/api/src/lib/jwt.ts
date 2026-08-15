@@ -32,12 +32,23 @@ export function verifyToken(token: string): JwtPayload {
 }
 
 export function cookieOptions() {
-  const isProd = process.env.NODE_ENV === "production";
+  // Deliberately its own env var, not tied to NODE_ENV === "production".
+  // NODE_ENV=production would also silently disable
+  // ENABLE_DEV_AUTH_ROUTES (see routes/auth.ts / health.ts), which
+  // dev/staging deployments still need working — see the deploy runbook
+  // for the full reasoning. COOKIE_SECURE lets a hosted-but-still-dev
+  // environment get correct cookie security without that side effect.
+  const secureCookies = process.env.COOKIE_SECURE === "true";
   return {
     httpOnly: true,
-    secure: isProd,
-    // Strict matches Auth doc; same-origin Vite proxy keeps cookies working locally.
-    sameSite: "strict" as const,
+    secure: secureCookies,
+    // "none" requires secure: true — browsers reject/drop the cookie
+    // otherwise, so these two have to move together. Needed once the
+    // frontend (Vercel) and API (its own subdomain) are genuinely
+    // cross-site. Locally, frontend+API are same-origin via the Vite
+    // proxy and there's no HTTPS, so this correctly falls back to
+    // "strict" with COOKIE_SECURE unset/false.
+    sameSite: secureCookies ? ("none" as const) : ("strict" as const),
     maxAge: 24 * 60 * 60 * 1000,
     path: "/",
   };
