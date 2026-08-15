@@ -113,7 +113,7 @@ ssh hive-api-deploy "cd ~/hive-freelance && \
   npm run build -w @hive-freelance/provisioner && \
   npm run build -w @hive-freelance/api && \
   mkdir -p ~/db-backups && \
-  (set -a; source packages/db/.env; set +a; pg_dump \"\$DIRECT_URL\" > ~/db-backups/manual-\$(date +%Y%m%d-%H%M%S).sql) && \
+  (set -a; source packages/db/.env; set +a; pg_dump \"\$PG_DUMP_URL\" > ~/db-backups/manual-\$(date +%Y%m%d-%H%M%S).sql) && \
   npm run migrate -w @hive-freelance/db && \
   pm2 restart hive-freelance-api"
 ```
@@ -162,7 +162,7 @@ the right file first):
 ```
 ssh hive-api-deploy "cd ~/hive-freelance/packages/db && \
   set -a && source .env && set +a && \
-  psql \"\$DIRECT_URL\" < ~/db-backups/<filename>.sql"
+  psql \"\$PG_DUMP_URL\" < ~/db-backups/<filename>.sql"
 ```
 
 ### Rolling back the application code
@@ -248,7 +248,15 @@ redundant — different tools read different ones:
 - `~/hive-freelance/.env` — read by `apps/api` itself at runtime
 - `~/hive-freelance/packages/db/.env` — read by the Prisma CLI
   specifically (`DATABASE_URL`/`DIRECT_URL`), a Prisma convention, not
-  something `apps/api` uses directly
+  something `apps/api` uses directly. That file also has `PG_DUMP_URL` —
+  needed because `DIRECT_URL`, despite its name, still goes through
+  Supavisor's session-mode pooler, and raw clients (`pg_dump`, `psql`)
+  fail to connect through it with a nonsensical "database does not
+  exist" error (verified directly — Prisma's own connector handles the
+  same pooler fine, this is specific to libpq-based tools).
+  `PG_DUMP_URL` points at Supabase's true direct, non-pooled host
+  instead, and is what every backup/restore command in this doc
+  actually uses.
 
 Both are gitignored and were never committed — see `.env.example` at
 the repo root for the full list of variables and what each one means;

@@ -85,12 +85,23 @@ jobs:
           # good point to restore from regardless of how it fails.
           # Kept as the 5 most recent; older ones are pruned so this
           # doesn't grow unbounded on a small box.
+          #
+          # Uses PG_DUMP_URL, not DIRECT_URL — despite the name,
+          # DIRECT_URL is still Supavisor's session-mode pooler, and
+          # pg_dump/psql fail to connect through it with a nonsensical
+          # "database does not exist" error (verified directly; Prisma's
+          # own connector handles the same pooler fine, so this is
+          # specific to raw libpq-based tools). PG_DUMP_URL points at
+          # Supabase's true direct (non-pooled) host instead. That host
+          # is IPv6-only and unreachable from some home networks, but
+          # this runs from the server's own datacenter connection, where
+          # it works.
           mkdir -p ~/db-backups
           BACKUP_FILE=~/db-backups/pre-migrate-$(date +%Y%m%d-%H%M%S).sql
           set -a
           source packages/db/.env
           set +a
-          pg_dump "$DIRECT_URL" > "$BACKUP_FILE"
+          pg_dump "$PG_DUMP_URL" > "$BACKUP_FILE"
           ls -t ~/db-backups/*.sql | tail -n +6 | xargs -r rm --
 
           npm run migrate -w @hive-freelance/db
