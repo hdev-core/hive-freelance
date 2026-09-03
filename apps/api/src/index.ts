@@ -29,7 +29,13 @@ const port = Number(process.env.API_PORT ?? 4000);
 
 app.use(
   cors({
-    origin: process.env.WEB_ORIGIN ?? "http://localhost:5173",
+    // WEB_ORIGIN accepts a comma-separated list so the app can be served from
+    // more than one host at once (e.g. during a migration between hosting).
+    // credentials:true forbids the "*" wildcard, so each origin must be named.
+    origin: (process.env.WEB_ORIGIN ?? "http://localhost:5173")
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean),
     credentials: true,
   }),
 );
