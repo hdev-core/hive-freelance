@@ -1,0 +1,123 @@
+name: Deploy API to Hetzner
+
+permissions:
+  contents: read
+
+"on":
+  push:
+    branches:
+      - develop
+    paths:
+      - 'apps/api/**'
+      - 'apps/listener/**'
+      - 'packages/**'
+      - '.github/workflows/deploy-api.yml'
+
+  workflow_dispatch:
+
+concurrency:
+  group: hive-freelance-api-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    environment:
+      name: production
+      url: https://hivefreelance.greateck.com
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SHA: ${{ github.sha }}
+
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+          # ECDSA, not ed25519: appleboy/ssh-action uses Go's crypto/ssh, whose
+          # default host-key preference lists ECDSA first. Pinning the ed25519
+          # fingerprint produces "host key fingerprint mismatch" against the
+          # correct host -- that cost us a week on the lingo deploy.
+          fingerprint: SHA256:vNTEuyEtLoo/Ha7niDE2WRxjahvxMHbQcHdmXdy/Rqg
+
+          envs: DEPLOY_PATH,DEPLOY_SHA
+
+          script: |
+            bash -se <<'DEPLOY_SCRIPT'
+            set -Eeuo pipefail
+
+            export PATH=/opt/node22/bin:$PATH
+
+            cd "$DEPLOY_PATH"
+            PREVIOUS_SHA="$(git rev-parse HEAD)"
+
+            rollback() {
+              exit_code=$?
+              trap - ERR
+              set +e
+              echo "Deployment failed. Rolling back to ${PREVIOUS_SHA}..."
+              cd "$DEPLOY_PATH"
+              git checkout --force "$PREVIOUS_SHA"
+              npm ci --no-audit --no-fund
+              npm run build
+              sudo systemctl restart freelance-api
+              sudo systemctl restart freelance-listener
+              echo "Rollback attempt finished."
+              exit "$exit_code"
+            }
+            trap rollback ERR
+
+            echo "Fetching ${DEPLOY_SHA}..."
+            git fetch origin develop
+            git cat-file -e "${DEPLOY_SHA}^{commit}"
+            git checkout --force "$DEPLOY_SHA"
+
+            # NOTE: .env and packages/db/.env are intentionally NOT written here.
+            # They hold values that exist only on the server and are not in repo
+            # secrets. Backed up out-of-band; see the consolidation runbook.
+            for required in .env packages/db/.env; do
+              if [ ! -s "$required" ]; then
+                echo "ERROR: ${required} missing on the server"
+                false
+              fi
+            done
+
+            echo "Installing dependencies..."
+            npm ci --no-audit --no-fund
+
+            echo "Building..."
+            npm run build
+
+            echo "Restarting services..."
+            sudo systemctl restart freelance-api
+            sudo systemctl restart freelance-listener
+
+            echo "Waiting for API health check..."
+            HEALTHY=false
+            for attempt in 1 2 3 4 5 6; do
+              if curl --fail --silent --show-error \
+                "http://127.0.0.1:4000/health" | grep -q '"ok":true'; then
+                HEALTHY=true
+                break
+              fi
+              echo "Health check attempt ${attempt}/6 failed."
+              [ "$attempt" -lt 6 ] && sleep 5
+            done
+
+            if [ "$HEALTHY" != "true" ]; then
+              echo "ERROR: API did not become healthy."
+              sudo systemctl status freelance-api --no-pager || true
+              journalctl -u freelance-api -n 50 --no-pager || true
+              false
+            fi
+
+            trap - ERR
+            echo "Deployment successful: ${DEPLOY_SHA}"
+            DEPLOY_SCRIPT
